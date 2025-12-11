@@ -1,0 +1,46 @@
+---
+alwaysApply: true
+---
+
+# Project Overview – Admin Management System
+
+## Name
+
+- Vehicle Track
+
+## Goal
+
+Build a simple, secure, and easy-to-maintain admin management system with:
+
+- Login and role-based access
+- Dashboard
+- Data management (CRUD)
+- Clean UI for internal use
+
+## Hosting & Infrastructure
+
+- Hosted on Vercel (free tier initially)
+- Cloudflare manages DNS, performance, security
+- Domain: .com.au (~AU$20/year)
+
+## Data & Storage
+
+- All data stored in a managed cloud database (Supabase)
+- Free tier supports thousands of records, enough for early-stage use
+
+## Costs
+
+- Initial: $0/month hosting + ~$20/year domain
+- Scaling later: ~USD $45/month (Vercel Pro + Supabase Pro)
+
+## Deliverables
+
+- Admin dashboard
+- Secure login + roles
+- CRUD pages
+- Domain + hosting setup
+- Easy future expansion
+
+## Summary
+
+A low-cost, secure, and scalable admin system that fits internal management needs and grows smoothly with the business.

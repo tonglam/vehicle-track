@@ -1,0 +1,84 @@
+---
+alwaysApply: true
+---
+
+# Technical Specification – Admin Management System
+
+## Architecture
+
+- Full stack built using Next.js (App Router)
+- Cloudflare handles DNS; Vercel handles hosting and deployments
+- Supabase PostgreSQL as primary database
+- Drizzle ORM for all schema and queries
+- Better Auth for authentication and role-based access
+- TanStack Query and TanStack Table for frontend data handling
+- Tailwind CSS for UI styling
+
+## Structure Rules
+
+- Use `/app` directory with Server Components by default
+- Client Components only for interactive elements (forms, tables, inputs)
+- API endpoints live under `app/api/*/route.ts`
+- Business logic goes in `lib/services/*`
+- Reusable UI components in `components/*`
+- Types live in `types/*`
+
+## Auth & Permissions
+
+- Better Auth with email/password login
+- Require authentication for all pages under `/dashboard/*`
+- User roles:
+  - `admin`: can manage users + all data
+  - `user`: restricted to their own data or limited views
+- Middleware enforces authentication + role checking
+
+## Database Rules
+
+- PostgreSQL via Supabase free tier
+- Use Drizzle schema files (no raw SQL)
+- Migrations tracked with Drizzle kit
+- Separate tables for:
+  - users
+  - roles / permissions
+  - any domain entities (to be defined)
+
+## API Design
+
+- All API routes:
+  - Validate inputs with Zod
+  - Enforce auth/role checks at the top
+  - Return typed JSON responses
+- No business logic in route files; delegate to services
+
+## UI Guidelines
+
+- Use Tailwind + shadcn for consistent styling
+- Use TanStack Table for lists
+- Use TanStack Query for all server data fetching
+- Keep components small and composable
+
+## Error Handling
+
+- Use `try/catch` in API routes
+- Return standard error formats:
+  - `{ error: string }`
+- Do not expose internal errors or stack traces
+
+## Performance Rules
+
+- Prefer Server Components for data-heavy pages
+- Cache database reads where appropriate
+- Do not install unnecessary libraries
+
+## Deployment Rules
+
+- All environment variables configured via Vercel
+- Domain connected through Cloudflare → Vercel
+- Production builds must pass TypeScript and ESLint checks
+
+## Scaling Plan
+
+- Move to Vercel Pro + Supabase Pro when:
+  - Database storage > 500MB
+  - Active users grow significantly
+  - API usage approaches free tier limits
