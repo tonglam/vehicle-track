@@ -1,6 +1,8 @@
 "use client";
 
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Toast } from "@/components/ui/toast";
+import { persistToast, type ToastPayload } from "@/components/ui/toast-storage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -58,6 +60,7 @@ export function AgreementTemplateForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showVariables, setShowVariables] = useState(false);
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const handleChange = (
     field: keyof TemplateFormState,
@@ -127,10 +130,19 @@ export function AgreementTemplateForm() {
         throw new Error(data.error || "Failed to create template");
       }
 
+      const successToast: ToastPayload = {
+        message: "Template created successfully!",
+        type: "success",
+      };
+      setToast(successToast);
+      persistToast(successToast);
       router.push("/dashboard/agreements/templates?status=created");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create template");
+      const message =
+        err instanceof Error ? err.message : "Failed to create template";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -138,6 +150,13 @@ export function AgreementTemplateForm() {
 
   return (
     <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
           <div>

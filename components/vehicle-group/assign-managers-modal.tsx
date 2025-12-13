@@ -1,6 +1,8 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
+import { Toast } from "@/components/ui/toast";
+import type { ToastPayload } from "@/components/ui/toast-storage";
 import { useEffect, useState } from "react";
 
 interface Manager {
@@ -33,6 +35,7 @@ export function AssignManagersModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -102,8 +105,15 @@ export function AssignManagersModal({
 
       onAssignSuccess();
       onClose();
+      setToast({
+        message: `Assigned ${selectedManagerIds.length} user${selectedManagerIds.length === 1 ? "" : "s"} to ${groupName}`,
+        type: "success",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign users");
+      const message =
+        err instanceof Error ? err.message : "Failed to assign users";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setSaving(false);
     }
@@ -115,25 +125,33 @@ export function AssignManagersModal({
   );
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Assign Users to ${groupName}`}
-      type="info"
-      primaryAction={{
-        label:
-          selectedManagerIds.length > 0
-            ? `Assign ${selectedManagerIds.length} User${selectedManagerIds.length !== 1 ? "s" : ""}`
-            : "Assign Selected",
-        onClick: handleAssign,
-        loading: saving,
-        disabled: selectedManagerIds.length === 0,
-      }}
-      secondaryAction={{
-        label: "Cancel",
-        onClick: onClose,
-      }}
-    >
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Assign Users to ${groupName}`}
+        type="info"
+        primaryAction={{
+          label:
+            selectedManagerIds.length > 0
+              ? `Assign ${selectedManagerIds.length} User${selectedManagerIds.length !== 1 ? "s" : ""}`
+              : "Assign Selected",
+          onClick: handleAssign,
+          loading: saving,
+          disabled: selectedManagerIds.length === 0,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: onClose,
+        }}
+      >
       <div className="mt-2">
         {loading ? (
           <div className="text-center py-8">
@@ -241,5 +259,6 @@ export function AssignManagersModal({
         )}
       </div>
     </Modal>
+    </>
   );
 }

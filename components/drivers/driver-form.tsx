@@ -1,5 +1,7 @@
 "use client";
 
+import { Toast } from "@/components/ui/toast";
+import { persistToast, type ToastPayload } from "@/components/ui/toast-storage";
 import type { CreateDriverInput, DriverDetail } from "@/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -20,6 +22,7 @@ export function DriverForm({ mode, driver }: DriverFormProps) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -63,6 +66,15 @@ export function DriverForm({ mode, driver }: DriverFormProps) {
         return;
       }
 
+      const successToast: ToastPayload = {
+        message:
+          mode === "edit"
+            ? "Driver updated successfully!"
+            : "Driver created successfully!",
+        type: "success",
+      };
+      setToast(successToast);
+      persistToast(successToast);
       if (mode === "edit") {
         router.push(`/dashboard/drivers/${data.id}?status=updated`);
       } else {
@@ -70,19 +82,30 @@ export function DriverForm({ mode, driver }: DriverFormProps) {
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save driver");
+      const message =
+        err instanceof Error ? err.message : "Failed to save driver";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
@@ -182,5 +205,6 @@ export function DriverForm({ mode, driver }: DriverFormProps) {
         </button>
       </div>
     </form>
+    </>
   );
 }

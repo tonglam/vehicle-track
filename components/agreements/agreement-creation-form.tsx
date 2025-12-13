@@ -1,5 +1,7 @@
 "use client";
 
+import { Toast } from "@/components/ui/toast";
+import { persistToast, type ToastPayload } from "@/components/ui/toast-storage";
 import type {
   AgreementTemplateSummary,
   InspectionListItem,
@@ -63,6 +65,7 @@ export function AgreementCreationForm({
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -133,11 +136,18 @@ export function AgreementCreationForm({
       }
 
       router.push("/dashboard/agreements?status=created");
+      const successToast: ToastPayload = {
+        message: "Agreement created successfully!",
+        type: "success",
+      };
+      setToast(successToast);
+      persistToast(successToast);
       router.refresh();
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Failed to create agreement"
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to create agreement";
+      setSubmitError(message);
+      setToast({ message, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -152,8 +162,16 @@ export function AgreementCreationForm({
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-      <div className="space-y-6">
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+        <div className="space-y-6">
         <section className="bg-white border border-gray-200 rounded-xl p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -426,5 +444,6 @@ export function AgreementCreationForm({
         </div>
       </aside>
     </div>
+    </>
   );
 }

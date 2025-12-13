@@ -1,5 +1,7 @@
 "use client";
 
+import { Toast } from "@/components/ui/toast";
+import { persistToast, type ToastPayload } from "@/components/ui/toast-storage";
 import type { VehicleGroup, VehicleGroupDetail } from "@/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +15,7 @@ export function GroupForm({ group, isEdit = false }: GroupFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const [formData, setFormData] = useState({
     name: group?.name || "",
@@ -65,6 +68,15 @@ export function GroupForm({ group, isEdit = false }: GroupFormProps) {
 
       const result = await response.json();
 
+      const successToast: ToastPayload = {
+        message: isEdit
+          ? "Vehicle group updated successfully!"
+          : "Vehicle group created successfully!",
+        type: "success",
+      };
+      setToast(successToast);
+      persistToast(successToast);
+
       // Redirect immediately with success message
       if (isEdit) {
         router.push(`/dashboard/vehicles/groups/${result.id}?success=updated`);
@@ -76,6 +88,7 @@ export function GroupForm({ group, isEdit = false }: GroupFormProps) {
       const message =
         err instanceof Error ? err.message : "Failed to save group";
       setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setLoading(false);
     }
@@ -83,6 +96,13 @@ export function GroupForm({ group, isEdit = false }: GroupFormProps) {
 
   return (
     <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div className="bg-white shadow rounded-lg overflow-hidden">
         {/* Card Header */}
         <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">

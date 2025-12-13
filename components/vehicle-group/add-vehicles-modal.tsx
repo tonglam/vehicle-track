@@ -1,6 +1,8 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
+import { Toast } from "@/components/ui/toast";
+import type { ToastPayload } from "@/components/ui/toast-storage";
 import type { VehicleWithGroup } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,6 +28,7 @@ export function AddVehiclesModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -96,30 +99,45 @@ export function AddVehiclesModal({
       onSuccess();
       onClose();
       router.refresh();
+      setToast({
+        message: `Added ${selectedVehicleIds.length} vehicle${selectedVehicleIds.length === 1 ? "" : "s"} to ${groupName}`,
+        type: "success",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add vehicles");
+      const message =
+        err instanceof Error ? err.message : "Failed to add vehicles";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Add Vehicles to ${groupName}`}
-      size="lg"
-      type="info"
-      primaryAction={{
-        label: "Add Selected Vehicles",
-        onClick: handleAddVehicles,
-        loading: saving,
-      }}
-      secondaryAction={{
-        label: "Cancel",
-        onClick: onClose,
-      }}
-    >
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Add Vehicles to ${groupName}`}
+        size="lg"
+        type="info"
+        primaryAction={{
+          label: "Add Selected Vehicles",
+          onClick: handleAddVehicles,
+          loading: saving,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: onClose,
+        }}
+      >
       <div className="mt-2">
         <p className="text-sm text-gray-700 mb-4">
           Select vehicles from Default Group to add:
@@ -226,5 +244,6 @@ export function AddVehiclesModal({
         )}
       </div>
     </Modal>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { Toast } from "@/components/ui/toast";
+import type { ToastPayload } from "@/components/ui/toast-storage";
 import type { InspectionListItem } from "@/types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -50,6 +52,7 @@ export function InspectionTable({
   const [search, setSearch] = useState(initialSearch);
   const [status, setStatus] = useState(initialStatus);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -99,11 +102,12 @@ export function InspectionTable({
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "Failed to delete inspection");
       }
+      setToast({ message: "Inspection deleted", type: "success" });
       router.refresh();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to delete inspection";
-      window.alert(message);
+      setToast({ message, type: "error" });
     } finally {
       setDeletingId(null);
     }
@@ -111,6 +115,13 @@ export function InspectionTable({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div className="border-b border-gray-100 p-6">
         <form
           onSubmit={handleSubmit}

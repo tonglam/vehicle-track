@@ -1,6 +1,8 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
+import { Toast } from "@/components/ui/toast";
+import type { ToastPayload } from "@/components/ui/toast-storage";
 import type { VehicleWithGroup } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,6 +28,7 @@ export function ReclaimVehiclesModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -96,32 +99,45 @@ export function ReclaimVehiclesModal({
       onSuccess();
       onClose();
       router.refresh();
+      setToast({
+        message: `Reclaimed ${selectedVehicleIds.length} vehicle${selectedVehicleIds.length === 1 ? "" : "s"}`,
+        type: "success",
+      });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to reclaim vehicles"
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to reclaim vehicles";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Reclaim Vehicles to ${groupName}`}
-      size="lg"
-      type="info"
-      primaryAction={{
-        label: "Reclaim Selected Vehicles",
-        onClick: handleReclaimVehicles,
-        loading: saving,
-      }}
-      secondaryAction={{
-        label: "Cancel",
-        onClick: onClose,
-      }}
-    >
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Reclaim Vehicles to ${groupName}`}
+        size="lg"
+        type="info"
+        primaryAction={{
+          label: "Reclaim Selected Vehicles",
+          onClick: handleReclaimVehicles,
+          loading: saving,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: onClose,
+        }}
+      >
       <div className="mt-2">
         <p className="text-sm text-gray-700 mb-4">
           Select vehicles from other groups to reclaim:
@@ -227,5 +243,6 @@ export function ReclaimVehiclesModal({
         )}
       </div>
     </Modal>
+    </>
   );
 }

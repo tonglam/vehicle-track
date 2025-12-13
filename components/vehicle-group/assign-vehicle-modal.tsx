@@ -1,6 +1,8 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
+import { Toast } from "@/components/ui/toast";
+import type { ToastPayload } from "@/components/ui/toast-storage";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -37,6 +39,7 @@ export function AssignVehicleModal({
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -108,31 +111,46 @@ export function AssignVehicleModal({
       onClose();
       router.refresh();
       onSuccess?.();
+      setToast({
+        message: `${vehicleName} assigned successfully`,
+        type: "success",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign vehicle");
+      const message =
+        err instanceof Error ? err.message : "Failed to assign vehicle";
+      setError(message);
+      setToast({ message, type: "error" });
     } finally {
       setAssigning(false);
     }
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Assign Vehicle to Group`}
-      size="lg"
-      type="info"
-      primaryAction={{
-        label: "Assign to Selected Group",
-        onClick: handleAssign,
-        loading: assigning,
-        disabled: !selectedGroupId,
-      }}
-      secondaryAction={{
-        label: "Cancel",
-        onClick: onClose,
-      }}
-    >
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Assign Vehicle to Group`}
+        size="lg"
+        type="info"
+        primaryAction={{
+          label: "Assign to Selected Group",
+          onClick: handleAssign,
+          loading: assigning,
+          disabled: !selectedGroupId,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: onClose,
+        }}
+      >
       <div className="mt-2">
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <p className="text-sm text-blue-900">
@@ -298,5 +316,6 @@ export function AssignVehicleModal({
         )}
       </div>
     </Modal>
+    </>
   );
 }

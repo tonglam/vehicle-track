@@ -1,6 +1,7 @@
 "use client";
 
 import { Toast, ToastType } from "@/components/ui/toast";
+import { persistToast } from "@/components/ui/toast-storage";
 import type { RoleOption, UserWithRole } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -273,10 +274,12 @@ export function ProfileForm({ user, roles = [] }: ProfileFormProps) {
       }
 
       // Success
-      setToast({
+      const successToast: ToastState = {
         message: "Profile updated successfully!",
         type: "success",
-      });
+      };
+      setToast(successToast);
+      persistToast(successToast);
       setIsDirty(false);
       router.refresh();
     } catch (error) {
