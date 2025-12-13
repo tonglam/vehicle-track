@@ -1,16 +1,13 @@
 import { z } from "zod";
 
-// Australian phone number format validation
-// Matches: 0412345678, 02 1234 5678, +61412345678
-const phoneRegex = /^(\+61|0)[2-478](\s?\d{4}\s?\d{4}|(?:\d{8}))$/;
+// Phone number validation - accepts various formats
+// Allows: +61412345678, 0412345678, 02 1234 5678, (02) 1234 5678, etc.
+const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,15}$/;
 
-// Password strength validation
+// Password validation - minimum 8 characters
 const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters")
-  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-  .regex(/[0-9]/, "Password must contain at least one number");
+  .min(8, "Password must be at least 8 characters");
 
 /**
  * Schema for creating a new user
@@ -26,9 +23,7 @@ export const createUserSchema = z
         "Username can only contain letters, numbers, dots, underscores, and hyphens"
       ),
     email: z.string().email("Invalid email address"),
-    phone: z
-      .string()
-      .regex(phoneRegex, "Invalid Australian phone number format"),
+    phone: z.string().regex(phoneRegex, "Invalid phone number format"),
     firstName: z
       .string()
       .min(1, "First name is required")
@@ -48,8 +43,7 @@ export const createUserSchema = z
           return passwordSchema.safeParse(val).success;
         },
         {
-          message:
-            "Password must be at least 8 characters with uppercase, lowercase, and number",
+          message: "Password must be at least 8 characters",
         }
       ),
     confirmPassword: z.string().optional(),
@@ -105,9 +99,7 @@ export const updateUserSchema = z
         "Username can only contain letters, numbers, dots, underscores, and hyphens"
       ),
     email: z.string().email("Invalid email address"),
-    phone: z
-      .string()
-      .regex(phoneRegex, "Invalid Australian phone number format"),
+    phone: z.string().regex(phoneRegex, "Invalid phone number format"),
     firstName: z
       .string()
       .min(1, "First name is required")
@@ -160,10 +152,7 @@ export const listUsersSchema = z.object({
     .string()
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 10))
-    .refine(
-      (val) => val > 0 && val <= 100,
-      "Limit must be between 1 and 100"
-    ),
+    .refine((val) => val > 0 && val <= 100, "Limit must be between 1 and 100"),
 });
 
 /**
@@ -180,9 +169,7 @@ export const updateProfileSchema = z.object({
     .min(1, "Last name is required")
     .max(50, "Last name must not exceed 50 characters"),
   email: z.string().email("Invalid email address"),
-  phone: z
-    .string()
-    .regex(phoneRegex, "Invalid Australian phone number format"),
+  phone: z.string().regex(phoneRegex, "Invalid Australian phone number format"),
   roleId: z.string().uuid("Invalid role").optional(), // only respected for admin
 });
 

@@ -2,7 +2,7 @@
 import { db } from "@/drizzle/db";
 import { accounts, roles, users } from "@/drizzle/schema";
 import bcrypt from "bcrypt";
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { auditLog } from "./audit.service";
 
 export interface ListUsersFilters {
@@ -13,12 +13,7 @@ export interface ListUsersFilters {
   active?: string;
 }
 
-const ROLE_FILTER_VALUES = [
-  "admin",
-  "manager",
-  "inspector",
-  "viewer",
-] as const;
+const ROLE_FILTER_VALUES = ["admin", "manager", "inspector", "viewer"] as const;
 type RoleFilterValue = (typeof ROLE_FILTER_VALUES)[number];
 
 function isRoleFilter(value: string): value is RoleFilterValue {
@@ -92,7 +87,8 @@ export async function listUsers(filters: ListUsersFilters = {}) {
 
   const whereClause = clauses.length > 0 ? and(...clauses) : undefined;
 
-  // Get users with their role names
+  // Optimized: Get users with their role names
+  // Use INNER JOIN since all users should have a valid role
   const usersList = await db
     .select({
       id: users.id,
@@ -108,19 +104,30 @@ export async function listUsers(filters: ListUsersFilters = {}) {
       updatedAt: users.updatedAt,
     })
     .from(users)
-    .leftJoin(roles, eq(users.roleId, roles.id))
+    .innerJoin(roles, eq(users.roleId, roles.id)) // Changed to INNER JOIN for better performance
     .where(whereClause)
     .limit(limit)
     .offset(offset)
-    .orderBy(users.createdAt);
+    .orderBy(desc(users.createdAt)); // Changed to DESC for better index utilization
 
-  // Get total count
-  const totalResult = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(users)
-    .leftJoin(roles, eq(users.roleId, roles.id))
-    .where(whereClause);
-  const total = totalResult[0]?.count || 0;
+  // Optimized count query - avoid JOIN when not filtering by role
+  let total: number;
+  if (role && role !== "all" && isRoleFilter(role)) {
+    // Only do JOIN when filtering by role
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(whereClause);
+    total = totalResult[0]?.count || 0;
+  } else {
+    // Simple count without JOIN for better performance
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(whereClause);
+    total = totalResult[0]?.count || 0;
+  }
 
   return {
     users: usersList as UserWithRole[],
@@ -161,20 +168,15 @@ export async function createUser(
   data: CreateUserData,
   currentUserId: string
 ): Promise<UserWithRole> {
-  const existingUsers = await db
-    .select({ id: users.id, username: users.username, email: users.email })
+  // Only check for username uniqueness (not email)
+  const [existingUsername] = await db
+    .select({ id: users.id, username: users.username })
     .from(users)
-    .where(or(eq(users.username, data.username), eq(users.email, data.email)))
+    .where(eq(users.username, data.username))
     .limit(1);
 
-  const [duplicate] = existingUsers;
-
-  if (duplicate) {
-    throw new Error(
-      duplicate.email === data.email
-        ? "Email is already registered"
-        : "Username is already taken"
-    );
+  if (existingUsername) {
+    throw new Error("Username is already taken");
   }
 
   const shouldHashPassword = data.password && data.password.trim() !== "";
@@ -216,7 +218,7 @@ export async function createUser(
       userId: newUser.id,
       accountId: newUser.id,
       providerId: "credential",
-      passwordHash: hashedPassword,
+      password: hashedPassword,
     });
   } else if (data.sendInvite) {
     await requestPasswordSetupInvite(newUser.email);

@@ -11,8 +11,8 @@ export default async function UsersPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { user } = await requireAuth();
-  const params = await searchParams;
 
+  const params = await searchParams;
   const statusMessage =
     typeof params.status === "string" ? params.status : undefined;
 
@@ -25,7 +25,8 @@ export default async function UsersPage({
     typeof params.page === "string" ? parseInt(params.page) : 1;
   const search = typeof params.search === "string" ? params.search : undefined;
   const roleFilter = typeof params.role === "string" ? params.role : "all";
-  const statusFilter = typeof params.status === "string" ? params.status : "all";
+  const statusFilter =
+    typeof params.active === "string" ? params.active : "all";
   const limit = 10;
   const offset = (currentPage - 1) * limit;
 
@@ -37,6 +38,7 @@ export default async function UsersPage({
     role: roleFilter,
     active: statusFilter,
   });
+
   const totalPages = Math.ceil(total / limit);
 
   // Determine if current user is admin (for showing action buttons)

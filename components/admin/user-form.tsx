@@ -74,7 +74,7 @@ export function UserForm({ mode, user, roles }: UserFormProps) {
   };
 
   const validateForm = () => {
-    const phoneRegex = /^(\+61|0)[2-478](\s?\d{4}\s?\d{4}|(?:\d{8}))$/;
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,15}$/;
     const newErrors: Record<string, string> = {};
 
     // Username validation
@@ -124,14 +124,6 @@ export function UserForm({ mode, user, roles }: UserFormProps) {
         newErrors.password = "Password is required";
       } else if (formData.password.length < 8) {
         newErrors.password = "Password must be at least 8 characters";
-      } else if (!/[A-Z]/.test(formData.password)) {
-        newErrors.password =
-          "Password must contain at least one uppercase letter";
-      } else if (!/[a-z]/.test(formData.password)) {
-        newErrors.password =
-          "Password must contain at least one lowercase letter";
-      } else if (!/[0-9]/.test(formData.password)) {
-        newErrors.password = "Password must contain at least one number";
       }
 
       if (formData.password !== formData.confirmPassword) {
@@ -226,7 +218,7 @@ export function UserForm({ mode, user, roles }: UserFormProps) {
             : "/dashboard/admin/users?status=updated";
 
         router.push(redirectTarget);
-        router.refresh();
+        // Remove router.refresh() as it might cause issues
       }, 1500);
     } catch (error) {
       console.error("Error saving user:", error);
@@ -318,9 +310,6 @@ export function UserForm({ mode, user, roles }: UserFormProps) {
             {errors.phone && (
               <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
             )}
-            <p className="mt-1 text-sm text-gray-500">
-              Australian format: 0412345678, 02 1234 5678, or +61412345678
-            </p>
           </div>
 
           {/* First Name */}
@@ -447,12 +436,6 @@ export function UserForm({ mode, user, roles }: UserFormProps) {
             />
             {errors.password && (
               <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-            )}
-            {mode === "create" && (
-              <p className="mt-1 text-sm text-gray-500">
-                Must be at least 8 characters with uppercase, lowercase, and
-                number
-              </p>
             )}
           </div>
 

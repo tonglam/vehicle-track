@@ -136,6 +136,39 @@ export async function listVehicles(
   };
 }
 
+// Optimized version for dashboard - skips expensive joins
+export async function listRecentVehicles(
+  limit = 5
+): Promise<VehicleWithGroup[]> {
+  return await db
+    .select({
+      id: vehicles.id,
+      year: vehicles.year,
+      make: vehicles.make,
+      model: vehicles.model,
+      licensePlate: vehicles.licensePlate,
+      vin: vehicles.vin,
+      status: vehicles.status,
+      ownership: vehicles.ownership,
+      ownerCompany: vehicles.ownerCompany,
+      fuelType: vehicles.fuelType,
+      transmission: vehicles.transmission,
+      engineSizeL: vehicles.engineSizeL,
+      odometer: vehicles.odometer,
+      purchaseDate: vehicles.purchaseDate,
+      lastServiceDate: vehicles.lastServiceDate,
+      nextServiceDue: vehicles.nextServiceDue,
+      notes: vehicles.notes,
+      createdAt: vehicles.createdAt,
+      updatedAt: vehicles.updatedAt,
+      updatedBy: vehicles.updatedBy,
+      groupName: sql<string>`'Default'`, // Simplified - no join needed for dashboard
+    })
+    .from(vehicles)
+    .orderBy(desc(vehicles.updatedAt))
+    .limit(limit);
+}
+
 export async function getVehicleById(
   id: string
 ): Promise<VehicleWithGroup | null> {

@@ -2,7 +2,6 @@
 
 import { Toast, type ToastType } from "@/components/ui/toast";
 import type { UserWithRole } from "@/types";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -94,7 +93,11 @@ export function UserTable({
     }
   };
 
-  const applyFilters = (nextTerm: string, nextRole: string, nextStatus: string) => {
+  const applyFilters = (
+    nextTerm: string,
+    nextRole: string,
+    nextStatus: string
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     if (nextTerm.trim()) {
       params.set("search", nextTerm.trim());
@@ -107,9 +110,9 @@ export function UserTable({
       params.delete("role");
     }
     if (nextStatus && nextStatus !== "all") {
-      params.set("status", nextStatus);
+      params.set("active", nextStatus);
     } else {
-      params.delete("status");
+      params.delete("active");
     }
     params.delete("page");
     router.push(params.toString() ? `${pathname}?${params}` : pathname);
@@ -161,7 +164,11 @@ export function UserTable({
                 className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
-                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
                   <path
                     fillRule="evenodd"
                     d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
@@ -297,7 +304,8 @@ export function UserTable({
 
         <div className="px-6 py-4 border-t border-gray-100 flex flex-col gap-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
           <span>
-            Showing {(currentPage - 1) * 10 + 1} to {Math.min(currentPage * 10, total)} of {total} users
+            Showing {(currentPage - 1) * 10 + 1} to{" "}
+            {Math.min(currentPage * 10, total)} of {total} users
           </span>
           {totalPages > 1 && (
             <div className="flex gap-2">

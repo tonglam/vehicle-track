@@ -49,8 +49,7 @@ function LoginForm() {
       setSuccess(true);
       setTimeout(() => {
         router.push(from);
-        router.refresh();
-      }, 500);
+      }, 100);
     } catch (err) {
       setError("An unexpected error occurred");
       console.error(err);

@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth-utils";
 import { listAgreements } from "@/lib/services/agreement.service";
 import { listInspections } from "@/lib/services/inspection.service";
-import { listVehicles } from "@/lib/services/vehicle.service";
+import { listRecentVehicles } from "@/lib/services/vehicle.service";
 import Link from "next/link";
 
 const dateFormatter = new Intl.DateTimeFormat("en-AU", {
@@ -24,13 +24,14 @@ function formatStatus(value: string) {
 
 export default async function DashboardPage() {
   const { user } = await requireAuth();
-  const [vehicleResult, inspectionResult, agreementResult] = await Promise.all([
-    listVehicles({ limit: 5, offset: 0 }),
-    listInspections({ limit: 5, offset: 0 }),
-    listAgreements({ limit: 5, offset: 0 }),
-  ]);
-
-  const recentVehicles = vehicleResult.vehicles;
+  // Load dashboard data in parallel for better performance
+  const [recentVehicles, inspectionResult, agreementResult] = await Promise.all(
+    [
+      listRecentVehicles(5), // Optimized query without joins
+      listInspections({ limit: 5, offset: 0 }),
+      listAgreements({ limit: 5, offset: 0 }),
+    ]
+  );
   const recentInspections = inspectionResult.inspections;
   const recentAgreements = agreementResult.agreements;
 
@@ -49,9 +50,10 @@ export default async function DashboardPage() {
           items={recentVehicles.map((vehicle) => ({
             id: vehicle.id,
             primary: vehicle.licensePlate,
-            secondary: [vehicle.year, vehicle.make, vehicle.model]
-              .filter(Boolean)
-              .join(" ") || "Unknown vehicle",
+            secondary:
+              [vehicle.year, vehicle.make, vehicle.model]
+                .filter(Boolean)
+                .join(" ") || "Unknown vehicle",
             meta: `Updated ${formatDate(vehicle.updatedAt)}`,
           }))}
         />
@@ -82,7 +84,9 @@ export default async function DashboardPage() {
       {/* Management Center */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Management Center</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Management Center
+          </h2>
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
             Quick actions
           </span>
@@ -160,8 +164,13 @@ function RecentListCard({
       ) : (
         <ul className="space-y-3">
           {items.map((item) => (
-            <li key={item.id} className="rounded-xl border border-slate-100 bg-white/90 p-3">
-              <p className="text-sm font-semibold text-gray-900">{item.primary}</p>
+            <li
+              key={item.id}
+              className="rounded-xl border border-slate-100 bg-white/90 p-3"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                {item.primary}
+              </p>
               <p className="text-sm text-gray-600">{item.secondary}</p>
               <p className="text-xs text-gray-400">{item.meta}</p>
             </li>
