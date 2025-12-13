@@ -68,3 +68,6 @@ Once the Next.js app is set up with Drizzle, future schema changes will be manag
 - Always test migrations in development first
 - Keep this directory as the source of truth for schema history
 
+
+
+

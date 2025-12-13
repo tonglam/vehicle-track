@@ -2,8 +2,8 @@ import { db } from "@/drizzle/db";
 import { roles, users } from "@/drizzle/schema";
 import { auth } from "@/lib/auth";
 import {
+  deleteVehicle,
   getVehicleById,
-  softDeleteVehicle,
   updateVehicle,
 } from "@/lib/services/vehicle.service";
 import { eq } from "drizzle-orm";
@@ -41,7 +41,6 @@ const vehicleUpdateSchema = z.object({
   lastServiceDate: z.string().optional().nullable(),
   nextServiceDue: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  groupId: z.string().uuid().optional().nullable(),
 });
 
 export async function GET(
@@ -143,7 +142,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    await softDeleteVehicle(id, session.user.id);
+    await deleteVehicle(id, session.user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting vehicle:", error);

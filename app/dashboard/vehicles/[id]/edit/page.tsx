@@ -1,3 +1,4 @@
+import { DeleteVehicleButton } from "@/components/vehicle/delete-vehicle-button";
 import { VehicleForm } from "@/components/vehicle/vehicle-form";
 import { requireRole } from "@/lib/auth-utils";
 import { getVehicleById } from "@/lib/services/vehicle.service";
@@ -18,11 +19,15 @@ export default async function EditVehiclePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Edit Vehicle</h1>
-        <p className="mt-2 text-gray-600">
-          {vehicle.year} {vehicle.make} {vehicle.model} - {vehicle.licensePlate}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Vehicle</h1>
+          <p className="mt-2 text-gray-600">
+            {vehicle.year} {vehicle.make} {vehicle.model} -{" "}
+            {vehicle.licensePlate}
+          </p>
+        </div>
+        <DeleteVehicleButton vehicleId={id} />
       </div>
 
       <VehicleForm vehicle={vehicle} isEdit={true} />

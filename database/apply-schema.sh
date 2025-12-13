@@ -33,3 +33,6 @@ echo "✅ Schema applied successfully!"
 echo ""
 echo "📊 Run './database/verify-schema.sh' to verify the installation"
 
+
+
+

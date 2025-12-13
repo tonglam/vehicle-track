@@ -1,0 +1,37 @@
+// Alternative: SendGrid implementation
+// Install: bun add @sendgrid/mail
+
+import sgMail from "@sendgrid/mail";
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+
+export async function sendPasswordResetEmail({
+  to,
+  resetUrl,
+  userName,
+}: {
+  to: string;
+  resetUrl: string;
+  userName?: string;
+}) {
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.EMAIL_FROM || "noreply@yourdomain.com",
+      subject: "Reset Your Password - Vehicle Track",
+      html: `
+        <h1>Reset Your Password</h1>
+        <p>Hello${userName ? ` ${userName}` : ""},</p>
+        <p>Click the link below to reset your password:</p>
+        <a href="${resetUrl}">Reset Password</a>
+        <p>This link expires in 1 hour.</p>
+      `,
+      text: `Reset your password: ${resetUrl}`,
+    });
+
+    console.log("✅ Email sent via SendGrid to:", to);
+  } catch (error) {
+    console.error("❌ SendGrid error:", error);
+    throw error;
+  }
+}

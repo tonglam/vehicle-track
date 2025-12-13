@@ -6,6 +6,13 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+const vehicleAttachmentSchema = z.object({
+  url: z.string().url(),
+  fileName: z.string(),
+  fileSize: z.number(),
+  contentType: z.string(),
+});
+
 const vehicleCreateSchema = z.object({
   year: z.number().int().min(1900).max(2100),
   make: z.string().min(1),
@@ -33,7 +40,7 @@ const vehicleCreateSchema = z.object({
   lastServiceDate: z.string().optional().nullable(),
   nextServiceDue: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  groupId: z.string().uuid().optional().nullable(),
+  attachments: z.array(vehicleAttachmentSchema).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -88,7 +95,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = vehicleCreateSchema.parse(body);
 
-    const vehicle = await createVehicle(validatedData, session.user.id);
+    const { attachments, ...vehicleData } = validatedData;
+    const vehicle = await createVehicle(
+      vehicleData,
+      session.user.id,
+      attachments
+    );
     return NextResponse.json(vehicle, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

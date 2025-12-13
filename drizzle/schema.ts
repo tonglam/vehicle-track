@@ -95,16 +95,56 @@ export const roles = pgTable("roles", {
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  username: text("username").notNull(),
+  name: text("name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  // Additional custom fields
+  username: text("username").notNull().unique(),
+  displayUsername: text("display_username"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
+  phone: text("phone"),
   roleId: uuid("role_id")
     .notNull()
     .references(() => roles.id, { onDelete: "restrict" }),
-  passwordHash: text("password_hash").notNull(),
   active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at").notNull(),
+  token: text("token").notNull().unique(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const accounts = pgTable("accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const verifications = pgTable("verification", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  identifier: text("identifier").notNull().unique(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -126,6 +166,21 @@ export const emailConfigs = pgTable("email_configs", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Organizations
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }),
+  updatedBy: uuid("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
 // Fleet
 export const vehicleGroups = pgTable("vehicle_groups", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -134,6 +189,7 @@ export const vehicleGroups = pgTable("vehicle_groups", {
   type: text("type"),
   contractId: text("contract_id"),
   areaManagerContact: text("area_manager_contact"),
+  signatureMode: text("signature_mode").notNull().default("dual"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   createdBy: uuid("created_by")
@@ -159,9 +215,6 @@ export const vehicles = pgTable("vehicles", {
   lastServiceDate: date("last_service_date"),
   nextServiceDue: date("next_service_due"),
   notes: text("notes"),
-  groupId: uuid("group_id").references(() => vehicleGroups.id, {
-    onDelete: "set null",
-  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   updatedBy: uuid("updated_by").references(() => users.id, {
@@ -169,7 +222,23 @@ export const vehicles = pgTable("vehicles", {
   }),
 });
 
+// Vehicle-to-Group assignments (which vehicles belong to which groups)
 export const vehicleGroupAssignments = pgTable("vehicle_group_assignments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  vehicleId: uuid("vehicle_id")
+    .notNull()
+    .references(() => vehicles.id, { onDelete: "cascade" }),
+  groupId: uuid("group_id")
+    .notNull()
+    .references(() => vehicleGroups.id, { onDelete: "cascade" }),
+  assignedAt: timestamp("assigned_at").notNull().defaultNow(),
+  assignedBy: uuid("assigned_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }),
+});
+
+// Manager-to-Group assignments (which managers manage which groups) - Future use
+export const groupManagerAssignments = pgTable("group_manager_assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
   groupId: uuid("group_id")
     .notNull()
