@@ -60,7 +60,7 @@ export default async function VehiclesPage({
             Add Vehicle
           </Link>
           <Link
-            href="/dashboard/fleet/groups"
+            href="/dashboard/vehicles/groups"
             className="inline-flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-r-lg border border-l-0 border-gray-300 hover:bg-gray-50 transition-colors font-medium"
           >
             <svg
