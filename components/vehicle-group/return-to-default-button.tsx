@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/components/ui/modal";
 import { Toast, type ToastType } from "@/components/ui/toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -20,16 +21,9 @@ export function ReturnToDefaultButton({
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(
     null
   );
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleReturn = async () => {
-    if (
-      !confirm(
-        `Return "${vehicleName}" to Default Group?\n\nThis vehicle will be moved back to the Default Group and can be reassigned to other groups.`
-      )
-    ) {
-      return;
-    }
-
     setLoading(true);
     try {
       // First, get the Default Group ID
@@ -61,6 +55,10 @@ export function ReturnToDefaultButton({
 
       router.refresh();
       onSuccess?.();
+      setToast({
+        message: `${vehicleName} returned to Default Group`,
+        type: "success",
+      });
     } catch (error) {
       console.error(error);
       setToast({
@@ -78,7 +76,7 @@ export function ReturnToDefaultButton({
   return (
     <>
       <button
-        onClick={handleReturn}
+        onClick={() => setShowConfirm(true)}
         disabled={loading}
         className="inline-flex items-center gap-1 px-3 py-1.5 border border-orange-300 text-orange-700 rounded-md hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         title="Return to Default Group"
@@ -98,6 +96,32 @@ export function ReturnToDefaultButton({
         </svg>
         {loading ? "Returning..." : "Return to Default"}
       </button>
+      <Modal
+        isOpen={showConfirm}
+        onClose={() => {
+          if (loading) return;
+          setShowConfirm(false);
+        }}
+        title="Return to Default Group"
+        type="danger"
+        primaryAction={{
+          label: "Return",
+          onClick: async () => {
+            setShowConfirm(false);
+            await handleReturn();
+          },
+          loading,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: () => setShowConfirm(false),
+        }}
+      >
+        <p className="text-sm text-gray-700">
+          Return <strong>{vehicleName}</strong> to the Default Group? The vehicle
+          will be moved out of its current group and can be reassigned.
+        </p>
+      </Modal>
       {toast && (
         <Toast
           message={toast.message}
