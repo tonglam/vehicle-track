@@ -9,6 +9,31 @@ interface DriverSigningViewProps {
   context: AgreementSigningContext;
 }
 
+function renderAgreementContent(context: AgreementSigningContext) {
+  if (!context.agreementHtml) {
+    return "";
+  }
+
+  const inspection = context.inspection;
+  const replacements: Record<string, string> = {
+    "organisation.name": context.organizationName ?? "",
+    "vehicle.make": inspection?.vehicleMake ?? context.vehicle.displayName,
+    "vehicle.model": inspection?.vehicleModel ?? "",
+    "vehicle.year": inspection?.vehicleYear?.toString() ?? "",
+    "vehicle.vin": inspection?.vehicleVin ?? "",
+    "vehicle.license_plate": context.vehicle.licensePlate ?? "",
+    "inspection.date": inspection ? formatDate(inspection.date) : "",
+    "inspection.exterior_condition": inspection?.exteriorCondition ?? "",
+    "inspection.interior_condition": inspection?.interiorCondition ?? "",
+    "inspection.mechanical_condition": inspection?.mechanicalCondition ?? "",
+  };
+
+  return context.agreementHtml.replace(/{{\s*([^}]+?)\s*}}/g, (_, token) => {
+    const key = token.trim();
+    return replacements[key] ?? "";
+  });
+}
+
 function formatDate(value: Date | string | null) {
   if (!value) return "—";
   const date = new Date(value);
@@ -102,6 +127,8 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
     setSignatureData(null);
   };
 
+  const renderedAgreementHtml = useMemo(() => renderAgreementContent(context), [context]);
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-8">
       {toast && (
@@ -143,7 +170,7 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
               </div>
               <div
                 className="prose prose-sm max-w-none text-gray-800"
-                dangerouslySetInnerHTML={{ __html: context.agreementHtml }}
+                dangerouslySetInnerHTML={{ __html: renderedAgreementHtml }}
               />
             </article>
 

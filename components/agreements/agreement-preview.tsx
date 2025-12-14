@@ -34,10 +34,11 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
   const imagesBySection = agreement.inspection.images.reduce<
     Record<string, typeof agreement.inspection.images>
   >((acc, image) => {
-    if (!acc[image.section]) {
-      acc[image.section] = [];
+    const section = image.section ?? "general";
+    if (!acc[section]) {
+      acc[section] = [];
     }
-    acc[image.section].push(image);
+    acc[section]!.push(image);
     return acc;
   }, {});
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);

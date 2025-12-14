@@ -107,6 +107,8 @@ export async function listAgreements(
       signedAt: agreements.signedAt,
       templateTitle: agreementTemplates.title,
       templateContent: agreementTemplates.contentRichtext,
+      organizationName: organizations.name,
+      templateContent: agreementTemplates.contentRichtext,
       vehicleMake: vehicles.make,
       vehicleModel: vehicles.model,
       vehicleYear: vehicles.year,
@@ -119,6 +121,10 @@ export async function listAgreements(
     .leftJoin(
       agreementTemplates,
       eq(agreements.templateId, agreementTemplates.id)
+    )
+    .leftJoin(
+      organizations,
+      eq(organizations.createdBy, agreements.createdBy)
     )
     .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id));
 
@@ -310,12 +316,17 @@ export async function getAgreementFinaliseContext(
       templateId: agreementTemplates.id,
       templateTitle: agreementTemplates.title,
       templateContent: agreementTemplates.contentRichtext,
+      organizationName: organizations.name,
     })
     .from(agreements)
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
     .leftJoin(
       agreementTemplates,
       eq(agreements.templateId, agreementTemplates.id)
+    )
+    .leftJoin(
+      organizations,
+      eq(organizations.createdBy, agreements.createdBy)
     )
     .where(eq(agreements.id, agreementId))
     .limit(1);
@@ -338,6 +349,7 @@ export async function getAgreementFinaliseContext(
     },
     finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
     signingToken: row.signingToken ?? null,
+    organizationName: row.organizationName ?? null,
     template: {
       id: row.templateId,
       title: row.templateTitle ?? "Untitled Template",
@@ -454,6 +466,7 @@ export async function getAgreementDetailContext(
     },
     finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
     signingToken: row.signingToken ?? null,
+    organizationName: row.organizationName ?? null,
     inspection: {
       id: row.inspectionId!,
       date: row.inspectionDate ?? row.createdAt,
@@ -517,6 +530,7 @@ export async function getAgreementSigningContext(
       driverLastName: drivers.lastName,
       driverEmail: drivers.email,
       driverPhone: drivers.phone,
+      organizationName: organizations.name,
     })
     .from(agreements)
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
@@ -524,6 +538,10 @@ export async function getAgreementSigningContext(
     .leftJoin(
       agreementTemplates,
       eq(agreements.templateId, agreementTemplates.id)
+    )
+    .leftJoin(
+      organizations,
+      eq(organizations.createdBy, agreements.createdBy)
     )
     .where(eq(agreements.signingToken, signingToken))
     .limit(1);
@@ -560,6 +578,7 @@ export async function getAgreementSigningContext(
       email: row.driverEmail ?? null,
       phone: row.driverPhone ?? null,
     },
+    organizationName: detail?.organizationName ?? row.organizationName ?? null,
     inspection: detail?.inspection ?? null,
     supportingDocuments: detail?.supportingDocuments ?? [],
   };
