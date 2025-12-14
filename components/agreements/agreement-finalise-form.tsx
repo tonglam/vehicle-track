@@ -2,10 +2,9 @@
 
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Toast } from "@/components/ui/toast";
-import { Modal } from "@/components/ui/modal";
-import type { AgreementFinaliseContext, DriverListItem } from "@/types";
+import type { AgreementFinaliseContext } from "@/types";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 interface AgreementFinaliseFormProps {
   agreement: AgreementFinaliseContext;
@@ -18,8 +17,6 @@ interface UploadedDocument {
   url: string;
   path: string;
 }
-
-const DRIVER_PAGE_SIZE = 4;
 
 function formatFileSize(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -41,87 +38,6 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
   const [submitting, setSubmitting] = useState<"draft" | "final" | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
-  const [driverSearch, setDriverSearch] = useState("");
-  const [driverPage, setDriverPage] = useState(1);
-  const [drivers, setDrivers] = useState<DriverListItem[]>([]);
-  const [driverTotalPages, setDriverTotalPages] = useState(1);
-  const [selectedDriver, setSelectedDriver] = useState<DriverListItem | null>(null);
-  const [driverLoading, setDriverLoading] = useState(false);
-  const [driverFetchError, setDriverFetchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const controller = new AbortController();
-
-    async function fetchDrivers() {
-      try {
-        setDriverFetchError(null);
-        setDriverLoading(true);
-
-        const params = new URLSearchParams({
-          limit: String(DRIVER_PAGE_SIZE),
-          page: String(driverPage),
-        });
-        const trimmedSearch = driverSearch.trim();
-        if (trimmedSearch) {
-          params.set("search", trimmedSearch);
-        }
-
-        const response = await fetch(`/api/drivers?${params.toString()}`, {
-          signal: controller.signal,
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to load drivers");
-        }
-
-        if (!isMounted) {
-          return;
-        }
-
-        const normalizedDrivers: DriverListItem[] = Array.isArray(data.drivers)
-          ? data.drivers.map((driver: DriverListItem) => ({
-              ...driver,
-              createdAt: new Date(driver.createdAt),
-            }))
-          : [];
-
-        const nextTotalPages = Math.max(1, data.totalPages ?? 1);
-
-        setDrivers(normalizedDrivers);
-        setDriverTotalPages(nextTotalPages);
-
-        if (driverPage > nextTotalPages) {
-          setDriverPage(nextTotalPages);
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-        console.error(error);
-        if (!isMounted) {
-          return;
-        }
-        const message =
-          error instanceof Error ? error.message : "Failed to load drivers";
-        setDriverFetchError(message);
-        setToast({ message, type: "error" });
-      } finally {
-        if (isMounted) {
-          setDriverLoading(false);
-        }
-      }
-    }
-
-    void fetchDrivers();
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [driverPage, driverSearch]);
 
   const acceptedTypes = useMemo(
     () => "image/*,.pdf,.doc,.docx,.xls,.xlsx",
@@ -218,13 +134,10 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
 
   const handleAction = async (mode: "draft" | "final") => {
     if (mode === "draft") {
-    setSubmitting("draft");
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setToast({
-        message: "Draft saved locally.",
-          type: "info",
-        });
+      setSubmitting("draft");
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        setToast({ message: "Draft saved locally.", type: "info" });
       } finally {
         setSubmitting(null);
       }
@@ -233,33 +146,19 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
 
     setSubmitting("final");
     try {
-      if (!selectedDriver) {
-        throw new Error("Please select a driver before sending");
-      }
       if (!content.trim()) {
-        throw new Error("Agreement content is required before sending");
+        throw new Error("Agreement content is required before generating.");
       }
-      console.warn("Finalising agreement", {
-        agreementId: agreement.id,
-        driverId: selectedDriver.id,
-      });
-      const response = await fetch(`/api/agreements/${agreement.id}/finalise`, {
-        method: "POST",
+      const response = await fetch(`/api/agreements/${agreement.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          driverId: selectedDriver.id,
-          content,
-        }),
+        body: JSON.stringify({ content }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || "Failed to send signing link");
+        throw new Error(data.error || "Failed to generate agreement");
       }
-      setToast({
-        message: `Signing link emailed to ${selectedDriver.firstName} ${selectedDriver.lastName}`.trim(),
-        type: "success",
-      });
-      setFinalizeModalOpen(false);
+      setToast({ message: "Agreement generated successfully", type: "success" });
       router.push(`/dashboard/agreements/${agreement.id}/preview`);
     } catch (error) {
       console.error(error);
@@ -267,11 +166,10 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
         message:
           error instanceof Error
             ? error.message
-            : "Unable to send signing link. Please try again.",
+            : "Unable to process agreement. Please try again.",
         type: "error",
       });
     } finally {
-      console.warn("Finalise request complete");
       setSubmitting(null);
     }
   };
@@ -313,11 +211,11 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
           </button>
           <button
             type="button"
-            onClick={() => setFinalizeModalOpen(true)}
+            onClick={() => handleAction("final")}
             disabled={submitting !== null}
             className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Finalise & Email Driver
+            {submitting === "final" ? "Generating..." : "Generate Agreement"}
           </button>
         </div>
       </div>
@@ -421,184 +319,6 @@ export function AgreementFinaliseForm({ agreement }: AgreementFinaliseFormProps)
           </div>
         )}
       </section>
-
-      <Modal
-        isOpen={finalizeModalOpen}
-        onClose={() => setFinalizeModalOpen(false)}
-        title="Finalise & email driver"
-        type="info"
-        size="lg"
-        primaryAction={{
-          label: submitting === "final" ? "Sending..." : "Send signing link",
-          onClick: () => {
-            void handleAction("final");
-          },
-          disabled: submitting === "final",
-          loading: submitting === "final",
-        }}
-        secondaryAction={{
-          label: "Cancel",
-          onClick: () => setFinalizeModalOpen(false),
-        }}
-      >
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Choose driver to invite <span className="text-red-500">*</span>
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Search by name, email, or phone to link a driver to this agreement.
-                </p>
-              </div>
-              {selectedDriver && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDriver(null)}
-                  className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-                >
-                  Clear selection
-                </button>
-              )}
-            </div>
-            <div className="mt-4">
-              <input
-                type="search"
-                value={driverSearch}
-                onChange={(e) => {
-                  setDriverSearch(e.target.value);
-                  setDriverPage(1);
-                }}
-                placeholder="Search by name, email, or phone..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-semibold text-gray-500">Driver</th>
-                    <th className="px-4 py-2 text-left font-semibold text-gray-500">Email</th>
-                    <th className="px-4 py-2 text-left font-semibold text-gray-500">Phone</th>
-                    <th className="px-4 py-2 text-left font-semibold text-gray-500">Created</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {driverLoading ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
-                        Loading drivers...
-                      </td>
-                    </tr>
-                  ) : driverFetchError ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-red-600">
-                        {driverFetchError}
-                      </td>
-                    </tr>
-                  ) : drivers.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
-                        No drivers found.
-                      </td>
-                    </tr>
-                  ) : (
-                    drivers.map((driver) => (
-                      <tr
-                        key={driver.id}
-                        className={`cursor-pointer hover:bg-blue-50 ${
-                          selectedDriver?.id === driver.id ? "bg-blue-50" : ""
-                        }`}
-                        onClick={() => setSelectedDriver(driver)}
-                      >
-                        <td className="px-4 py-2 font-semibold text-gray-900">
-                          {`${driver.firstName} ${driver.lastName}`.trim()}
-                        </td>
-                        <td className="px-4 py-2 text-gray-600">{driver.email ?? "—"}</td>
-                        <td className="px-4 py-2 text-gray-600">{driver.phone ?? "—"}</td>
-                        <td className="px-4 py-2 text-gray-600">
-                          {driver.createdAt.toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              <div className="flex items-center justify-between px-4 py-2 text-xs text-gray-500">
-                <span>
-                  Page {driverPage} of {driverTotalPages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDriverPage((p) => Math.max(1, p - 1))}
-                    disabled={driverPage === 1}
-                    className="rounded border border-gray-300 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDriverPage((p) => Math.min(driverTotalPages, p + 1))}
-                    disabled={driverPage === driverTotalPages}
-                    className="rounded border border-gray-300 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h3 className="text-lg font-semibold text-gray-900">Selected Driver</h3>
-            {selectedDriver ? (
-              <div className="mt-4 space-y-1 text-sm text-gray-700">
-                <p className="font-semibold text-gray-900">
-                  {`${selectedDriver.firstName} ${selectedDriver.lastName}`.trim()}
-                </p>
-                <p>{selectedDriver.email ?? "No email provided"}</p>
-                <p>{selectedDriver.phone ?? "No phone provided"}</p>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-500">No driver selected.</p>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-blue-100 p-2 text-blue-600">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 7h16M4 12h16M4 17h16"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">What happens next?</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                  <li>We email the driver a personal link to view this agreement.</li>
-                  <li>They read and sign digitally — no edits, just a simple sign-off.</li>
-                  <li>Once they finish, this agreement switches to Signed.</li>
-                </ul>
-              </div>
-            </div>
-          </section>
-        </div>
-      </Modal>
     </div>
   );
 }

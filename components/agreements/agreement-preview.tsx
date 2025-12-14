@@ -24,6 +24,13 @@ function formatDate(value: Date | string | null) {
   }).format(parsed);
 }
 
+const statusStyles: Record<string, string> = {
+  draft: "bg-purple-100 text-purple-800",
+  pending_signature: "bg-blue-100 text-blue-800",
+  signed: "bg-emerald-100 text-emerald-800",
+  terminated: "bg-rose-100 text-rose-700",
+};
+
 function formatSize(bytes: number) {
   if (!bytes) return "0 KB";
   return `${(bytes / 1024).toFixed(1)} KB`;
@@ -249,7 +256,13 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
               onClose={() => setToast(null)}
             />
           )}
-          <p className="text-sm font-semibold text-gray-500">Status · {agreement.status.replace("_", " ")}</p>
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+              statusStyles[agreement.status] ?? "bg-gray-100 text-gray-700"
+            }`}
+          >
+            {agreement.status.replace("_", " ")}
+          </span>
           <h1 className="mt-1 text-3xl font-bold text-gray-900">
             VEHICLE RENTAL AGREEMENT
           </h1>
