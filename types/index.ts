@@ -172,6 +172,13 @@ export interface AgreementDetailContext {
     status: string | null;
     ownership: string | null;
   };
+  driver: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  driverSignatureData: string | null;
+  signedAt: Date | null;
   inspection: {
     id: string;
     date: Date;

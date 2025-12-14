@@ -16,7 +16,7 @@ import type {
   AgreementSigningContext,
   AgreementTemplateSummary,
 } from "@/types";
-import { and, asc, desc, eq, ilike, or, sql, not, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql, not, ne, type SQL } from "drizzle-orm";
 import { auditLog } from "./audit.service";
 import { listAgreementSupportingDocs } from "@/lib/storage";
 import { users as inspectorUsers } from "@/drizzle/schema";
@@ -236,6 +236,23 @@ export async function createAgreementRecord(
     throw new Error("Inspection does not match selected vehicle");
   }
 
+  const [activeAgreement] = await db
+    .select({ id: agreements.id })
+    .from(agreements)
+    .where(
+      and(
+        eq(agreements.vehicleId, vehicleId),
+        ne(agreements.status, "terminated")
+      )
+    )
+    .limit(1);
+
+  if (activeAgreement) {
+    throw new Error(
+      "This vehicle already has an active agreement. Please terminate the existing agreement before completing a new one."
+    );
+  }
+
   const [agreement] = await db
     .insert(agreements)
     .values({
@@ -370,6 +387,12 @@ export async function getAgreementDetailContext(
       signingToken: agreements.signingToken,
       templateTitle: agreementTemplates.title,
       organizationName: organizations.name,
+      driverFirstName: drivers.firstName,
+      driverLastName: drivers.lastName,
+      driverEmail: drivers.email,
+      driverPhone: drivers.phone,
+      driverSignatureData: agreements.driverSignatureData,
+      signedAt: agreements.signedAt,
       vehicleId: agreements.vehicleId,
       vehicleYear: vehicles.year,
       vehicleMake: vehicles.make,
@@ -402,6 +425,7 @@ export async function getAgreementDetailContext(
       agreementTemplates,
       eq(agreements.templateId, agreementTemplates.id)
     )
+    .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id))
     .leftJoin(
       organizations,
       eq(organizations.createdBy, agreements.createdBy)
@@ -472,6 +496,16 @@ export async function getAgreementDetailContext(
     finalContentRichtext: row.finalContentRichtext ?? null,
     signingToken: row.signingToken ?? null,
     organizationName: row.organizationName ?? null,
+    driver:
+      row.driverFirstName || row.driverLastName || row.driverEmail || row.driverPhone
+        ? {
+            name: `${row.driverFirstName ?? ""} ${row.driverLastName ?? ""}`.trim() || "Driver",
+            email: row.driverEmail ?? null,
+            phone: row.driverPhone ?? null,
+          }
+        : null,
+    driverSignatureData: row.driverSignatureData ?? null,
+    signedAt: row.signedAt ?? null,
     inspection: {
       id: row.inspectionId!,
       date: row.inspectionDate ?? row.createdAt,

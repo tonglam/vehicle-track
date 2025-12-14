@@ -2,7 +2,7 @@
 
 import type { AgreementDetailContext, DriverListItem } from "@/types";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { useRouter } from "next/navigation";
 import { Toast } from "@/components/ui/toast";
@@ -49,6 +49,13 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
     return acc;
   }, {});
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showTerminateModal, setShowTerminateModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"zip" | "pdf">("zip");
+  const [sendExportEmail, setSendExportEmail] = useState(false);
+  const [terminateReason, setTerminateReason] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [driverSearch, setDriverSearch] = useState("");
   const [driverPage, setDriverPage] = useState(1);
   const [drivers, setDrivers] = useState<DriverListItem[]>([]);
@@ -206,6 +213,107 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch(`/api/agreements/${agreement.id}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: exportFormat, sendEmail: sendExportEmail }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to export agreement");
+      }
+      setToast({ message: "Export started successfully.", type: "success" });
+      setShowExportModal(false);
+    } catch (error) {
+      console.error(error);
+      setToast({
+        message:
+          error instanceof Error ? error.message : "Unable to export agreement.",
+        type: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleTerminate = async () => {
+    setTerminating(true);
+    try {
+      const response = await fetch(`/api/agreements/${agreement.id}/terminate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: terminateReason.trim() || undefined }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to terminate agreement");
+      }
+      setToast({ message: "Agreement terminated.", type: "success" });
+      setShowTerminateModal(false);
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      setToast({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to terminate agreement. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setTerminating(false);
+    }
+  };
+
+  const signatureSection = useMemo(() => {
+    if (!agreement.driver) {
+      return null;
+    }
+    return (
+      <article className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Signature</h2>
+          <p className="text-sm text-gray-500">Driver acknowledgement for this agreement.</p>
+        </div>
+        <dl className="space-y-2 text-sm text-gray-700">
+          <div>
+            <dt className="text-gray-500">Driver</dt>
+            <dd className="font-semibold">{agreement.driver.name}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Email</dt>
+            <dd>{agreement.driver.email ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Phone</dt>
+            <dd>{agreement.driver.phone ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Signed At</dt>
+            <dd>{agreement.signedAt ? formatDate(agreement.signedAt) : "—"}</dd>
+          </div>
+        </dl>
+        <div className="mt-4">
+          {agreement.driverSignatureData ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={agreement.driverSignatureData}
+                alt="Driver signature"
+                className="max-h-32 rounded-md border border-gray-200 bg-white"
+              />
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">No signature on file.</p>
+          )}
+        </div>
+      </article>
+    );
+  }, [agreement]);
+
   const handleSendSigningLink = async () => {
     if (!selectedDriver) {
       setToast({ message: "Please select a driver", type: "error" });
@@ -277,13 +385,32 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
           >
             Edit Agreement
           </Link>
-          <button
-            type="button"
-            onClick={() => setShowFinalizeModal(true)}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-          >
-            Finalise Agreement
-          </button>
+          {agreement.status === "signed" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(true)}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTerminateModal(true)}
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+              >
+                Terminate
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowFinalizeModal(true)}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              Finalise Agreement
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowModifyModal(true)}
@@ -463,6 +590,94 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
               </div>
             </div>
           </section>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Agreement"
+        type="info"
+        primaryAction={{
+          label: exporting ? "Exporting..." : exportFormat === "zip" ? "Export ZIP" : "Export PDF",
+          onClick: handleExport,
+          loading: exporting,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: () => setShowExportModal(false),
+        }}
+      >
+        <div className="space-y-4 text-sm text-gray-700">
+          <p className="text-sm text-gray-600">Export format:</p>
+          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${exportFormat === "zip" ? "border-blue-300 bg-blue-50" : "border-gray-200"}`} >
+            <input
+              type="radio"
+              name="export-format"
+              value="zip"
+              checked={exportFormat === "zip"}
+              onChange={() => setExportFormat("zip")}
+              className="mt-1"
+            />
+            <div>
+              <p className="font-semibold">Combined ZIP</p>
+              <p className="text-xs text-gray-500">Bundles the agreement PDF and supporting documents into sectioned folders.</p>
+            </div>
+          </label>
+          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${exportFormat === "pdf" ? "border-blue-300 bg-blue-50" : "border-gray-200"}`} >
+            <input
+              type="radio"
+              name="export-format"
+              value="pdf"
+              checked={exportFormat === "pdf"}
+              onChange={() => setExportFormat("pdf")}
+              className="mt-1"
+            />
+            <div>
+              <p className="font-semibold">PDF</p>
+              <p className="text-xs text-gray-500">Generates the agreement PDF without attachments.</p>
+            </div>
+          </label>
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={sendExportEmail}
+              onChange={(event) => setSendExportEmail(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            Send exported file via email
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showTerminateModal}
+        onClose={() => setShowTerminateModal(false)}
+        title="Terminate Agreement?"
+        type="danger"
+        primaryAction={{
+          label: terminating ? "Terminating..." : "Terminate Agreement",
+          onClick: handleTerminate,
+          loading: terminating,
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          onClick: () => setShowTerminateModal(false),
+        }}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">This action cannot be undone. The agreement will be marked as terminated.</p>
+          <div>
+            <label className="text-sm font-semibold text-gray-500" htmlFor="termination-reason">Termination Reason (Optional)</label>
+            <textarea
+              id="termination-reason"
+              rows={4}
+              value={terminateReason}
+              onChange={(event) => setTerminateReason(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              placeholder="Add additional context..."
+            />
+          </div>
         </div>
       </Modal>
 
@@ -721,6 +936,8 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
             </ul>
           )}
         </div>
+
+        {signatureSection}
       </div>
     </div>
   );

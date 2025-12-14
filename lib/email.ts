@@ -305,3 +305,60 @@ export async function sendAgreementInviteEmail({
 
   return data;
 }
+
+interface AgreementTerminationEmail {
+  to: string;
+  driverName: string;
+  requesterName: string;
+  vehicleName: string;
+  licensePlate: string;
+  templateTitle: string;
+  reason?: string;
+}
+
+export async function sendAgreementTerminationEmail({
+  to,
+  driverName,
+  requesterName,
+  vehicleName,
+  licensePlate,
+  templateTitle,
+  reason,
+}: AgreementTerminationEmail) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; background-color: #f9fafb; margin: 0; padding: 24px; }
+          .card { max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 32px; border: 1px solid #e5e7eb; }
+          h1 { font-size: 20px; color: #0f172a; }
+          p { line-height: 1.6; color: #374151; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>Agreement Terminated</h1>
+          <p>Hi ${driverName || "there"},</p>
+          <p>${requesterName || "A fleet manager"} has terminated the agreement "${templateTitle}" for ${vehicleName} (${licensePlate}).</p>
+          ${reason ? `<p><strong>Reason provided:</strong> ${reason}</p>` : ""}
+          <p>If you have any questions, please reply to this email.</p>
+        </div>
+      </body>
+    </html>
+  `;
+  const text = `Agreement Terminated\n\n${requesterName || "A fleet manager"} has terminated the agreement "${templateTitle}" for ${vehicleName} (${licensePlate}).${reason ? `\nReason: ${reason}` : ""}`;
+
+  const { error } = await resend.emails.send({
+    from: process.env.EMAIL_FROM || "Vehicle Track <noreply@vehicletrack.app>",
+    to: [to],
+    subject: "Agreement terminated",
+    html,
+    text,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Unable to send termination email");
+  }
+}
