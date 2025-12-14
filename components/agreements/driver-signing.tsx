@@ -82,7 +82,7 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
     );
   }, [status]);
 
-  const submittingDisabled = status === "signed" || submitting;
+  const submittingDisabled = status === "signed" || submitting || !signatureData;
 
   const handleSubmit = async () => {
     if (status === "signed") {
@@ -110,6 +110,7 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
       setStatus("signed");
       signatureRef.current?.clear();
       setSignatureData(null);
+      window.location.reload();
     } catch (error) {
       console.error(error);
       setToast({
@@ -139,6 +140,11 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
         />
       )}
       <div className="mx-auto max-w-6xl space-y-8">
+        {status === "signed" && (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            This agreement is signed and cannot be signed again.
+          </div>
+        )}
         <header className="flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
@@ -180,37 +186,94 @@ export function DriverSigningView({ context }: DriverSigningViewProps) {
                   <h2 className="text-lg font-semibold text-gray-900">Vehicle Inspection</h2>
                   <p className="text-sm text-gray-500">Latest condition report for reference.</p>
                 </div>
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  Reference only
-                </span>
+                <div className="text-right text-sm text-gray-500">
+                  {context.inspection && (
+                    <p className="text-xs text-gray-500">
+                      Status · {context.inspection.status.replace("_", " ")}
+                      <span className="ml-1 text-[11px] text-gray-400">
+                        ({
+                          context.inspection.status === "submitted"
+                            ? "Inspection completed"
+                            : context.inspection.status === "draft"
+                            ? "Inspection in progress"
+                            : "Inspection status"
+                        })
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Reference only
               </div>
               {context.inspection ? (
-                <dl className="grid gap-4 text-sm text-gray-700 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-gray-500">Inspection Date</dt>
-                    <dd className="font-semibold">{formatDate(context.inspection.date)}</dd>
+                <div className="space-y-6 text-sm text-gray-700">
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Vehicle
+                    </h3>
+                    <dl className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-gray-500">Make</dt>
+                        <dd className="font-semibold">
+                          {context.inspection.vehicleMake ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">Model</dt>
+                        <dd className="font-semibold">
+                          {context.inspection.vehicleModel ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">Year</dt>
+                        <dd className="font-semibold">
+                          {context.inspection.vehicleYear ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-500">License Plate</dt>
+                        <dd className="font-semibold">
+                          {context.vehicle.licensePlate}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
-                  <div>
-                    <dt className="text-gray-500">Inspector</dt>
-                    <dd className="font-semibold">{context.inspection.inspector ?? "Unassigned"}</dd>
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      VIN
+                    </h3>
+                    <p className="font-semibold">
+                      {context.inspection.vehicleVin ?? "—"}
+                    </p>
                   </div>
-                  <div>
-                    <dt className="text-gray-500">Exterior</dt>
-                    <dd>{context.inspection.exteriorCondition ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Interior</dt>
-                    <dd>{context.inspection.interiorCondition ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Mechanical</dt>
-                    <dd>{context.inspection.mechanicalCondition ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500">Notes</dt>
-                    <dd>{context.inspection.notes ?? "No additional notes"}</dd>
-                  </div>
-                </dl>
+                  <dl className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-gray-500">Inspection Date</dt>
+                      <dd className="font-semibold">{formatDate(context.inspection.date)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Inspector</dt>
+                      <dd className="font-semibold">{context.inspection.inspector ?? "Unassigned"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Exterior</dt>
+                      <dd>{context.inspection.exteriorCondition ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Interior</dt>
+                      <dd>{context.inspection.interiorCondition ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Mechanical</dt>
+                      <dd>{context.inspection.mechanicalCondition ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Notes</dt>
+                      <dd>{context.inspection.notes ?? "No additional notes"}</dd>
+                    </div>
+                  </dl>
+                </div>
               ) : (
                 <p className="text-sm text-gray-600">No inspection details available.</p>
               )}

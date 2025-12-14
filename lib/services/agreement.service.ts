@@ -13,6 +13,7 @@ import type {
   AgreementDetailContext,
   AgreementFinaliseContext,
   AgreementListItem,
+  AgreementSigningContext,
   AgreementTemplateSummary,
 } from "@/types";
 import { and, asc, desc, eq, ilike, or, sql, not, type SQL } from "drizzle-orm";
@@ -106,7 +107,6 @@ export async function listAgreements(
       updatedAt: agreements.updatedAt,
       signedAt: agreements.signedAt,
       templateTitle: agreementTemplates.title,
-      templateContent: agreementTemplates.contentRichtext,
       organizationName: organizations.name,
       templateContent: agreementTemplates.contentRichtext,
       vehicleMake: vehicles.make,
@@ -369,6 +369,7 @@ export async function getAgreementDetailContext(
       finalContentRichtext: agreements.finalContentRichtext,
       signingToken: agreements.signingToken,
       templateTitle: agreementTemplates.title,
+      organizationName: organizations.name,
       vehicleId: agreements.vehicleId,
       vehicleYear: vehicles.year,
       vehicleMake: vehicles.make,
@@ -400,6 +401,10 @@ export async function getAgreementDetailContext(
     .leftJoin(
       agreementTemplates,
       eq(agreements.templateId, agreementTemplates.id)
+    )
+    .leftJoin(
+      organizations,
+      eq(organizations.createdBy, agreements.createdBy)
     )
     .where(eq(agreements.id, agreementId))
     .limit(1);
@@ -464,7 +469,7 @@ export async function getAgreementDetailContext(
       status: row.vehicleStatus ?? null,
       ownership: row.ownership ?? null,
     },
-    finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
+    finalContentRichtext: row.finalContentRichtext ?? null,
     signingToken: row.signingToken ?? null,
     organizationName: row.organizationName ?? null,
     inspection: {

@@ -137,7 +137,7 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
 
   useEffect(() => {
     if (agreement.availableInspections.length > 0) {
-      setSelectedInspectionId(agreement.availableInspections[0].id);
+      setSelectedInspectionId(agreement.availableInspections[0]?.id ?? "");
     } else {
       setSelectedInspectionId("");
     }
@@ -644,7 +644,7 @@ export function AgreementPreview({ agreement }: AgreementPreviewProps) {
                 </p>
                 {imagesBySection[item.section]?.length ? (
                   <div className="mt-3 flex flex-wrap gap-3">
-                    {imagesBySection[item.section].map((image) => (
+                    {imagesBySection[item.section]?.map((image) => (
                       <a
                         key={image.id}
                         href={image.url}
