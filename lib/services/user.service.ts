@@ -122,10 +122,10 @@ export async function listUsers(filters: ListUsersFilters = {}) {
     total = totalResult[0]?.count || 0;
   } else {
     // Simple count without JOIN for better performance
-    const totalResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(users)
-      .where(whereClause);
+  const totalResult = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(users)
+    .where(whereClause);
     total = totalResult[0]?.count || 0;
   }
 

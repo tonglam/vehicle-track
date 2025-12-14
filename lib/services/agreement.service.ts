@@ -3,16 +3,22 @@ import {
   agreementTemplates,
   agreements,
   drivers,
+  inspectionImages,
   inspections,
   vehicles,
+  organizations,
 } from "@/drizzle/schema";
 import type {
   Agreement,
+  AgreementDetailContext,
+  AgreementFinaliseContext,
   AgreementListItem,
   AgreementTemplateSummary,
 } from "@/types";
-import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql, not, type SQL } from "drizzle-orm";
 import { auditLog } from "./audit.service";
+import { listAgreementSupportingDocs } from "@/lib/storage";
+import { users as inspectorUsers } from "@/drizzle/schema";
 
 export interface AgreementListFilters {
   status?: Agreement["status"];
@@ -100,6 +106,7 @@ export async function listAgreements(
       updatedAt: agreements.updatedAt,
       signedAt: agreements.signedAt,
       templateTitle: agreementTemplates.title,
+      templateContent: agreementTemplates.contentRichtext,
       vehicleMake: vehicles.make,
       vehicleModel: vehicles.model,
       vehicleYear: vehicles.year,
@@ -284,4 +291,276 @@ export async function createAgreementTemplate(
   });
 
   return template;
+}
+
+export async function getAgreementFinaliseContext(
+  agreementId: string
+): Promise<AgreementFinaliseContext | null> {
+  const [row] = await db
+    .select({
+      id: agreements.id,
+      status: agreements.status,
+      createdAt: agreements.createdAt,
+      finalContentRichtext: agreements.finalContentRichtext,
+      signingToken: agreements.signingToken,
+      vehicleYear: vehicles.year,
+      vehicleMake: vehicles.make,
+      vehicleModel: vehicles.model,
+      licensePlate: vehicles.licensePlate,
+      templateId: agreementTemplates.id,
+      templateTitle: agreementTemplates.title,
+      templateContent: agreementTemplates.contentRichtext,
+    })
+    .from(agreements)
+    .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
+    .leftJoin(
+      agreementTemplates,
+      eq(agreements.templateId, agreementTemplates.id)
+    )
+    .where(eq(agreements.id, agreementId))
+    .limit(1);
+
+  if (!row || !row.templateId || !row.templateContent) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    status: row.status,
+    createdAt: row.createdAt,
+    vehicle: {
+      displayName: buildVehicleDisplayName({
+        year: row.vehicleYear,
+        make: row.vehicleMake,
+        model: row.vehicleModel,
+      }),
+      licensePlate: row.licensePlate ?? "—",
+    },
+    finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
+    signingToken: row.signingToken ?? null,
+    template: {
+      id: row.templateId,
+      title: row.templateTitle ?? "Untitled Template",
+      contentRichtext: row.templateContent,
+    },
+  };
+}
+
+export async function getAgreementDetailContext(
+  agreementId: string
+): Promise<AgreementDetailContext | null> {
+  const [row] = await db
+    .select({
+      id: agreements.id,
+      status: agreements.status,
+      createdAt: agreements.createdAt,
+      finalContentRichtext: agreements.finalContentRichtext,
+      signingToken: agreements.signingToken,
+      templateTitle: agreementTemplates.title,
+      vehicleId: agreements.vehicleId,
+      vehicleYear: vehicles.year,
+      vehicleMake: vehicles.make,
+      vehicleModel: vehicles.model,
+      licensePlate: vehicles.licensePlate,
+      vehicleStatus: vehicles.status,
+      ownership: vehicles.ownership,
+      inspectionId: inspections.id,
+      inspectionDate: inspections.updatedAt,
+      inspectorFirstName: inspectorUsers.firstName,
+      inspectorLastName: inspectorUsers.lastName,
+      inspectionStatus: inspections.status,
+      exteriorCondition: inspections.exteriorCondition,
+      interiorCondition: inspections.interiorCondition,
+      mechanicalCondition: inspections.mechanicalCondition,
+      additionalNotes: inspections.additionalNotes,
+      vehicleVin: vehicles.vin,
+    })
+    .from(agreements)
+    .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
+    .leftJoin(
+      inspections,
+      eq(agreements.inspectionId, inspections.id)
+    )
+    .leftJoin(
+      inspectorUsers,
+      eq(inspections.inspectorId, inspectorUsers.id)
+    )
+    .leftJoin(
+      agreementTemplates,
+      eq(agreements.templateId, agreementTemplates.id)
+    )
+    .where(eq(agreements.id, agreementId))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  if (!row.inspectionId) {
+    return null;
+  }
+
+  const [docs, images, availableInspections] = await Promise.all([
+    listAgreementSupportingDocs(agreementId),
+    db
+      .select({
+        id: inspectionImages.id,
+        section: inspectionImages.section,
+        url: inspectionImages.fileUrl,
+        name: inspectionImages.fileName,
+        size: inspectionImages.fileSizeBytes,
+      })
+      .from(inspectionImages)
+      .where(eq(inspectionImages.inspectionId, row.inspectionId))
+      .orderBy(asc(inspectionImages.section), asc(inspectionImages.createdAt)),
+    row.vehicleId
+      ? db
+          .select({
+            id: inspections.id,
+            date: inspections.updatedAt,
+            status: inspections.status,
+            inspectorFirstName: inspectorUsers.firstName,
+            inspectorLastName: inspectorUsers.lastName,
+          })
+          .from(inspections)
+          .leftJoin(
+            inspectorUsers,
+            eq(inspections.inspectorId, inspectorUsers.id)
+          )
+          .where(
+            and(
+              eq(inspections.vehicleId, row.vehicleId),
+              not(eq(inspections.id, row.inspectionId))
+            )
+          )
+          .orderBy(desc(inspections.updatedAt))
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    id: row.id,
+    status: row.status,
+    createdAt: row.createdAt,
+    templateTitle: row.templateTitle ?? "Untitled Template",
+    vehicle: {
+      displayName: buildVehicleDisplayName({
+        year: row.vehicleYear,
+        make: row.vehicleMake,
+        model: row.vehicleModel,
+      }),
+      licensePlate: row.licensePlate ?? "—",
+      status: row.vehicleStatus ?? null,
+      ownership: row.ownership ?? null,
+    },
+    finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
+    signingToken: row.signingToken ?? null,
+    inspection: {
+      id: row.inspectionId!,
+      date: row.inspectionDate ?? row.createdAt,
+      inspector:
+        row.inspectorFirstName || row.inspectorLastName
+          ? `${row.inspectorFirstName ?? ""} ${row.inspectorLastName ?? ""}`.trim()
+          : null,
+      status: row.inspectionStatus ?? "draft",
+      exteriorCondition: row.exteriorCondition,
+      interiorCondition: row.interiorCondition,
+      mechanicalCondition: row.mechanicalCondition,
+      notes: row.additionalNotes,
+      vehicleMake: row.vehicleMake,
+      vehicleModel: row.vehicleModel,
+      vehicleYear: row.vehicleYear,
+      vehicleVin: row.vehicleVin,
+      images: images.map((image) => ({
+        id: image.id,
+        section: image.section,
+        url: image.url,
+        name: image.name,
+        size: image.size,
+      })),
+    },
+    supportingDocuments: docs.map((doc) => ({
+      id: doc.path,
+      name: doc.name,
+      size: doc.size,
+      url: doc.url,
+    })),
+    availableInspections: (Array.isArray(availableInspections)
+      ? availableInspections
+      : []
+    ).map((insp) => ({
+      id: insp.id,
+      date: insp.date ?? new Date(),
+      status: insp.status,
+      inspector:
+        insp.inspectorFirstName || insp.inspectorLastName
+          ? `${insp.inspectorFirstName ?? ""} ${insp.inspectorLastName ?? ""}`.trim()
+          : null,
+    })),
+  };
+}
+
+export async function getAgreementSigningContext(
+  signingToken: string
+): Promise<AgreementSigningContext | null> {
+  const [row] = await db
+    .select({
+      id: agreements.id,
+      status: agreements.status,
+      signingToken: agreements.signingToken,
+      vehicleYear: vehicles.year,
+      vehicleMake: vehicles.make,
+      vehicleModel: vehicles.model,
+      licensePlate: vehicles.licensePlate,
+      finalContent: agreements.finalContentRichtext,
+      templateContent: agreementTemplates.contentRichtext,
+      driverFirstName: drivers.firstName,
+      driverLastName: drivers.lastName,
+      driverEmail: drivers.email,
+      driverPhone: drivers.phone,
+    })
+    .from(agreements)
+    .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
+    .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id))
+    .leftJoin(
+      agreementTemplates,
+      eq(agreements.templateId, agreementTemplates.id)
+    )
+    .where(eq(agreements.signingToken, signingToken))
+    .limit(1);
+
+  if (!row || !row.signingToken) {
+    return null;
+  }
+
+  const detail = await getAgreementDetailContext(row.id);
+
+  const agreementHtml =
+    detail?.finalContentRichtext ??
+    row.finalContent ??
+    row.templateContent ??
+    "";
+
+  return {
+    id: row.id,
+    status: row.status,
+    signingToken: row.signingToken,
+    agreementHtml,
+    vehicle: {
+      displayName: buildVehicleDisplayName({
+        year: row.vehicleYear,
+        make: row.vehicleMake,
+        model: row.vehicleModel,
+      }),
+      licensePlate: row.licensePlate ?? "—",
+    },
+    driver: {
+      name:
+        `${row.driverFirstName ?? ""} ${row.driverLastName ?? ""}`.trim() ||
+        "Driver",
+      email: row.driverEmail ?? null,
+      phone: row.driverPhone ?? null,
+    },
+    inspection: detail?.inspection ?? null,
+    supportingDocuments: detail?.supportingDocuments ?? [],
+  };
 }

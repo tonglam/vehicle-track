@@ -202,7 +202,7 @@ export function AgreementTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link
-                      href={`/dashboard/agreements/${agreement.id}`}
+                      href={`/dashboard/agreements/${agreement.id}/preview`}
                       className="inline-flex items-center rounded-lg border border-blue-100 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
                     >
                       View

@@ -157,7 +157,6 @@ If you didn't request this password reset, you can safely ignore this email. You
       throw new Error(`Email sending failed: ${error.message}`);
     }
 
-    console.log("✅ Password reset email sent successfully to:", to);
     return { success: true, data };
   } catch (error) {
     console.error("❌ Email error:", error);
@@ -187,4 +186,122 @@ export async function sendWelcomeEmail({
   } catch (error) {
     console.error("Failed to send welcome email:", error);
   }
+}
+
+interface AgreementInviteEmail {
+  to: string;
+  driverName: string;
+  requesterName: string;
+  vehicleName: string;
+  licensePlate: string;
+  templateTitle: string;
+  signingLink: string;
+}
+
+export function buildAgreementInviteEmail({
+  driverName,
+  requesterName,
+  vehicleName,
+  licensePlate,
+  templateTitle,
+  signingLink,
+}: Omit<AgreementInviteEmail, "to">) {
+  const subject = `${templateTitle} ready for your signature`;
+  const greetingName = driverName || "there";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #111827;
+            background-color: #f9fafb;
+            margin: 0;
+            padding: 24px;
+          }
+          .card {
+            max-width: 640px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px;
+            border: 1px solid #e5e7eb;
+          }
+          .cta {
+            display: inline-block;
+            padding: 12px 28px;
+            margin: 24px 0;
+            background-color: #2563eb;
+            color: #ffffff !important;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+          }
+          p {
+            line-height: 1.6;
+            margin: 0 0 16px 0;
+            color: #374151;
+          }
+          .details {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            background-color: #f9fafb;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <p>Hi ${greetingName},</p>
+          <p><strong>${requesterName || "A fleet manager"}</strong> just prepared a vehicle handover agreement for you.</p>
+          <div class="details">
+            <p style="margin: 0 0 8px 0;"><strong>Agreement:</strong> ${templateTitle}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Vehicle:</strong> ${vehicleName} (${licensePlate})</p>
+            <p style="margin: 0;">Review the terms, add any required comments, and sign digitally in a single step.</p>
+          </div>
+          <p>Use the secure link below to open the agreement. The signing flow works on desktop or mobile and only takes a minute.</p>
+          <p style="text-align: center;">
+            <a class="cta" href="${signingLink}" target="_blank" rel="noreferrer">Review & Sign Agreement</a>
+          </p>
+          <p>If you have any questions, reply directly to this email and ${requesterName || "the team"} will help.</p>
+          <p style="margin-top: 32px;">Thank you,<br/>Vehicle Track</p>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Hi ${greetingName},
+
+${requesterName || "A fleet manager"} shared a vehicle agreement for ${vehicleName} (${licensePlate}).
+Open the link below to review and sign:
+${signingLink}
+
+Thank you,
+Vehicle Track`;
+
+  return { subject, html, text };
+}
+
+export async function sendAgreementInviteEmail({
+  to,
+  ...rest
+}: AgreementInviteEmail) {
+  const { subject, html, text } = buildAgreementInviteEmail(rest);
+  const { data, error } = await resend.emails.send({
+    from: process.env.EMAIL_FROM || "Vehicle Track <noreply@vehicletrack.app>",
+    to: [to],
+    subject,
+    html,
+    text,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Unable to send agreement invite");
+  }
+
+  return data;
 }

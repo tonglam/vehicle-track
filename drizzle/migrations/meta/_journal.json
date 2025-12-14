@@ -8,6 +8,27 @@
       "when": 1765512291589,
       "tag": "0000_dry_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1765648399444,
+      "tag": "0002_allow_multiple_agreements_per_inspection",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765657000000,
+      "tag": "0003_add_agreement_final_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765659000000,
+      "tag": "0004_add_driver_signature",
+      "breakpoints": true
     }
   ]
 }

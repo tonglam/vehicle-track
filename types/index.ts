@@ -140,6 +140,92 @@ export interface AgreementListItem {
   signedBy: string | null;
 }
 
+export interface AgreementFinaliseContext {
+  id: string;
+  status: Agreement["status"];
+  createdAt: Date;
+  vehicle: {
+    displayName: string;
+    licensePlate: string;
+  };
+  template: {
+    id: string;
+    title: string;
+    contentRichtext: string;
+  };
+  finalContentRichtext: string | null;
+  signingToken: string | null;
+  organizationName: string | null;
+}
+
+export interface AgreementDetailContext {
+  id: string;
+  status: Agreement["status"];
+  createdAt: Date;
+  templateTitle: string;
+  finalContentRichtext: string | null;
+  signingToken: string | null;
+  organizationName: string | null;
+  vehicle: {
+    displayName: string;
+    licensePlate: string;
+    status: string | null;
+    ownership: string | null;
+  };
+  inspection: {
+    id: string;
+    date: Date;
+    inspector: string | null;
+    status: string;
+    exteriorCondition: string | null;
+    interiorCondition: string | null;
+    mechanicalCondition: string | null;
+    notes: string | null;
+    vehicleMake: string | null;
+    vehicleModel: string | null;
+    vehicleYear: number | null;
+    vehicleVin: string | null;
+    images: Array<{
+      id: string;
+      section: string;
+      url: string;
+      name: string;
+      size: number;
+    }>;
+  };
+  supportingDocuments: Array<{
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+  }>;
+  availableInspections: Array<{
+    id: string;
+    date: Date;
+    status: string;
+    inspector: string | null;
+  }>;
+}
+
+export interface AgreementSigningContext {
+  id: string;
+  status: Agreement["status"];
+  signingToken: string;
+  agreementHtml: string;
+  vehicle: {
+    displayName: string;
+    licensePlate: string;
+  };
+  driver: {
+    name: string;
+    email: string | null;
+    phone: string | null;
+  };
+  organizationName: string | null;
+  inspection: AgreementDetailContext["inspection"] | null;
+  supportingDocuments: AgreementDetailContext["supportingDocuments"];
+}
+
 // Agreement Template types
 export type AgreementTemplate = InferSelectModel<
   typeof schema.agreementTemplates

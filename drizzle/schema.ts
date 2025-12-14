@@ -335,7 +335,6 @@ export const agreements = pgTable("agreements", {
     .references(() => vehicles.id, { onDelete: "restrict" }),
   inspectionId: uuid("inspection_id")
     .notNull()
-    .unique()
     .references(() => inspections.id, { onDelete: "restrict" }),
   templateId: uuid("template_id")
     .notNull()
@@ -350,6 +349,9 @@ export const agreements = pgTable("agreements", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "restrict" }),
+  finalContentRichtext: text("final_content_richtext"),
+  signingToken: text("signing_token"),
+  driverSignatureData: text("driver_signature_data"),
 });
 
 export const driverAgreements = pgTable("driver_agreements", {

@@ -66,6 +66,9 @@ export function AgreementCreationForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastPayload | null>(null);
+  const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (!selectedVehicleId) {
@@ -109,13 +112,21 @@ export function AgreementCreationForm({
     return () => controller.abort();
   }, [selectedVehicleId]);
 
-  const handleSubmit = async () => {
-    if (!selectedVehicleId || !selectedInspectionId || !selectedTemplateId) {
+  const showPrerequisiteError = () => {
+    const message = "Please select a vehicle and inspection first.";
+    setSubmitError(message);
+    setToast({ message, type: "error" });
+  };
+
+  const createAgreementAndRedirect = async (templateId: string) => {
+    if (!selectedVehicleId || !selectedInspectionId) {
+      showPrerequisiteError();
       return;
     }
 
-    setSubmitting(true);
     setSubmitError(null);
+    setSubmitting(true);
+    setCreatingTemplateId(templateId);
 
     try {
       const response = await fetch("/api/agreements", {
@@ -126,23 +137,33 @@ export function AgreementCreationForm({
         body: JSON.stringify({
           vehicleId: selectedVehicleId,
           inspectionId: selectedInspectionId,
-          templateId: selectedTemplateId,
+          templateId,
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create agreement");
+        const message = data.error || "Failed to create agreement";
+        setSubmitError(message);
+        setToast({ message, type: "error" });
+        return;
       }
 
-      router.push("/dashboard/agreements?status=created");
+      const agreementId = data.agreement?.id;
+      if (!agreementId) {
+        const message = "Agreement response missing identifier";
+        setSubmitError(message);
+        setToast({ message, type: "error" });
+        return;
+      }
+
       const successToast: ToastPayload = {
-        message: "Agreement created successfully!",
+        message: "Agreement created. Finalise the content next.",
         type: "success",
       };
-      setToast(successToast);
       persistToast(successToast);
-      router.refresh();
+      router.push(`/dashboard/agreements/${agreementId}`);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to create agreement";
@@ -150,7 +171,28 @@ export function AgreementCreationForm({
       setToast({ message, type: "error" });
     } finally {
       setSubmitting(false);
+      setCreatingTemplateId(null);
     }
+  };
+
+  const handleTemplateClick = (templateId: string) => {
+    if (!selectedVehicleId || !selectedInspectionId) {
+      showPrerequisiteError();
+      return;
+    }
+    setSelectedTemplateId(templateId);
+    void createAgreementAndRedirect(templateId);
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedTemplateId) {
+      const message = "Please choose a template to continue.";
+      setSubmitError(message);
+      setToast({ message, type: "error" });
+      return;
+    }
+
+    await createAgreementAndRedirect(selectedTemplateId);
   };
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
@@ -236,6 +278,17 @@ export function AgreementCreationForm({
             </p>
           ) : (
             <div className="mt-4 space-y-4">
+              {selectedVehicle && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex flex-wrap items-center gap-3">
+                  <div className="font-semibold">
+                    {formatVehicleLabel(selectedVehicle)}
+                  </div>
+                  <span className="text-xs text-blue-700 bg-white rounded-full px-3 py-1 border border-blue-100">
+                    Plate: {selectedVehicle.licensePlate || "N/A"}
+                  </span>
+                </div>
+              )}
+
               {loading && (
                 <p className="text-sm text-gray-500">Loading inspections...</p>
               )}
@@ -258,52 +311,86 @@ export function AgreementCreationForm({
 
               {!loading && !error && inspections.length > 0 && (
                 <div className="space-y-3">
-                  {inspections.map((inspection) => (
-                    <label
-                      key={inspection.id}
-                      className={`w-full rounded-lg border px-4 py-3 text-left transition ${
-                        selectedInspectionId === inspection.id
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {formatDate(inspection.updatedAt)}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatTime(inspection.updatedAt)}
-                          </p>
+                  {inspections.map((inspection) => {
+                    const isSelected = selectedInspectionId === inspection.id;
+                    return (
+                      <button
+                        type="button"
+                        key={inspection.id}
+                        onClick={() => setSelectedInspectionId(inspection.id)}
+                        aria-pressed={isSelected}
+                        className={`w-full text-left rounded-2xl border px-5 py-4 transition-all ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-200"
+                            : "border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-base font-semibold text-gray-900">
+                              Inspection on {formatDate(inspection.updatedAt)}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatTime(inspection.updatedAt)}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              inspection.status === "submitted"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {inspection.status === "submitted" ? "Submitted" : "Draft"}
+                          </span>
                         </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            inspection.status === "submitted"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {inspection.status === "submitted" ? "Submitted" : "Draft"}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-gray-600">
-                        <span>
-                          Inspector: {inspection.inspectorName || "Unassigned"}
-                        </span>
-                        {inspection.submittedAt && (
-                          <span>Signed {formatDate(inspection.submittedAt)}</span>
+                        <div className="mt-4 grid gap-4 text-sm text-gray-700 sm:grid-cols-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Inspector
+                            </p>
+                            <p className="font-medium">
+                              {inspection.inspectorName || "Unassigned"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Submitted
+                            </p>
+                            <p className="font-medium">
+                              {inspection.submittedAt
+                                ? formatDate(inspection.submittedAt)
+                                : "Not submitted"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-gray-500">
+                              Last Updated
+                            </p>
+                            <p className="font-medium">{formatDate(inspection.updatedAt)}</p>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-700">
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            Selected
+                          </div>
                         )}
-                      </div>
-                      <input
-                        type="radio"
-                        name="inspection"
-                        className="sr-only"
-                        checked={selectedInspectionId === inspection.id}
-                        value={inspection.id}
-                        onChange={() => setSelectedInspectionId(inspection.id)}
-                      />
-                    </label>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -336,44 +423,98 @@ export function AgreementCreationForm({
             </p>
           ) : (
             <div className="mt-4 space-y-3">
-              {templates.map((template) => (
-                <label
-                  key={template.id}
-                  className={`w-full rounded-lg border px-4 py-3 transition ${
-                    selectedTemplateId === template.id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {template.title}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Updated {formatDate(template.updatedAt)}
+              {selectedInspection && (
+                <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Preparing agreement from the inspection completed on {" "}
+                  <span className="font-semibold">
+                    {formatDate(selectedInspection.updatedAt)} at {formatTime(selectedInspection.updatedAt)}
+                  </span>
+                  .
+                </div>
+              )}
+              {templates.map((template) => {
+                const isSelected = selectedTemplateId === template.id;
+                const isProcessing =
+                  submitting && creatingTemplateId === template.id;
+                return (
+                  <button
+                    type="button"
+                    key={template.id}
+                    onClick={() => handleTemplateClick(template.id)}
+                    disabled={submitting}
+                    aria-pressed={isSelected}
+                    className={`w-full rounded-2xl border px-5 py-4 text-left transition-all disabled:cursor-not-allowed ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-200"
+                        : "border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-base font-semibold text-gray-900">
+                          {template.title}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Updated {formatDate(template.updatedAt)}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          template.active
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {template.active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="mt-4 text-sm text-gray-600">
+                      <p>
+                        {template.active
+                          ? "Available for immediate signature collection."
+                          : "This template is currently inactive."}
                       </p>
                     </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        template.active
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {template.active ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                  <input
-                    type="radio"
-                    name="template"
-                    className="sr-only"
-                    checked={selectedTemplateId === template.id}
-                    value={template.id}
-                    onChange={() => setSelectedTemplateId(template.id)}
-                  />
-                </label>
-              ))}
+                    {isProcessing ? (
+                      <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-700">
+                        <svg
+                          className="h-4 w-4 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 12a8 8 0 018-8"
+                          />
+                        </svg>
+                        Preparing editor...
+                      </div>
+                    ) : (
+                      isSelected && (
+                        <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-700">
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Selected
+                        </div>
+                      )
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>

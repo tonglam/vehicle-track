@@ -97,13 +97,16 @@ export async function uploadFile(
  * Delete a file from Supabase Storage
  * @param bucket - The storage bucket name
  * @param path - The path within the bucket
+ * @param useAdmin - Whether to use the admin client
  */
 export async function deleteFile(
   bucket: string,
-  path: string
+  path: string,
+  useAdmin = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabaseClient.storage.from(bucket).remove([path]);
+    const client = useAdmin ? getSupabaseAdmin() : supabaseClient;
+    const { error } = await client.storage.from(bucket).remove([path]);
 
     if (error) {
       console.error("Delete error:", error);
@@ -157,6 +160,60 @@ export function generateInspectionImagePath(
 }
 
 /**
+ * Generate a path for agreement supporting documents
+ * Structure: agreements/{agreementId}/supporting/{timestamp}-{sanitizedFileName}
+ */
+export function generateAgreementSupportingDocPath(
+  agreementId: string,
+  fileName: string
+): string {
+  const timestamp = Date.now();
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  return `agreements/${agreementId}/supporting/${timestamp}-${sanitizedFileName}`;
+}
+
+export async function listAgreementSupportingDocs(
+  agreementId: string
+): Promise<
+  Array<{
+    name: string;
+    size: number;
+    path: string;
+    url: string;
+  }>
+> {
+  const client = getSupabaseAdmin();
+  const prefix = `agreements/${agreementId}/supporting`;
+
+  const { data, error } = await client.storage
+    .from(STORAGE_BUCKET_NAME)
+    .list(prefix, {
+      limit: 100,
+      sortBy: { column: "created_at", order: "desc" },
+    });
+
+  if (error || !data) {
+    console.error("Failed to list supporting documents:", error);
+    return [];
+  }
+
+  return data
+    .filter((item) => item.name)
+    .map((item) => {
+      const fullPath = `${prefix}/${item.name}`;
+      const {
+        data: { publicUrl },
+      } = client.storage.from(STORAGE_BUCKET_NAME).getPublicUrl(fullPath);
+      return {
+        name: item.name,
+        size: item.metadata?.size ?? 0,
+        path: fullPath,
+        url: publicUrl,
+      };
+    });
+}
+
+/**
  * Storage Bucket Folder Structure:
  *
  * vehicle-track/
@@ -164,9 +221,14 @@ export function generateInspectionImagePath(
  * │   └── {userId}/
  * │       └── logo-{timestamp}.{ext}
  * │
- * └── vehicles/
- *     └── attachments/
- *         └── {userId}/
+ * ├── vehicles/
+ * │   └── attachments/
+ * │       └── {userId}/
+ * │           └── {timestamp}-{filename}
+ * │
+ * └── agreements/
+ *     └── {agreementId}/
+ *         └── supporting/
  *             └── {timestamp}-{filename}
  */
 
