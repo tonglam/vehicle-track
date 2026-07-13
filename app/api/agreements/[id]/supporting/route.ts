@@ -1,6 +1,7 @@
 import { db } from "@/drizzle/db";
-import { agreements, roles, users } from "@/drizzle/schema";
-import { auth } from "@/lib/auth";
+import { agreements } from "@/drizzle/schema";
+import { authorizeApiRequest } from "@/lib/api-authorization";
+import { AGREEMENT_EDITOR_ROLES } from "@/lib/authorization-policy";
 import {
   deleteFile,
   generateAgreementSupportingDocPath,
@@ -9,26 +10,6 @@ import {
 } from "@/lib/storage";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-
-async function authorize(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session?.user) {
-    return { status: 401 as const, error: "Unauthorized" } as const;
-  }
-
-  const [user] = await db
-    .select({ roleName: roles.name })
-    .from(users)
-    .innerJoin(roles, eq(users.roleId, roles.id))
-    .where(eq(users.id, session.user.id))
-    .limit(1);
-
-  if (!user || !["admin", "manager"].includes(user.roleName)) {
-    return { status: 403 as const, error: "Insufficient permissions" } as const;
-  }
-
-  return { status: 200 as const, userId: session.user.id } as const;
-}
 
 async function agreementExists(agreementId: string) {
   const [record] = await db
@@ -41,16 +22,25 @@ async function agreementExists(agreementId: string) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const authResult = await authorize(request);
+  const authResult = await authorizeApiRequest(
+    request.headers,
+    AGREEMENT_EDITOR_ROLES,
+  );
   if (authResult.status !== 200) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status },
+    );
   }
 
   const { id: agreementId } = await params;
   if (!agreementId) {
-    return NextResponse.json({ error: "Agreement ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Agreement ID is required" },
+      { status: 400 },
+    );
   }
 
   const agreement = await agreementExists(agreementId);
@@ -76,12 +66,12 @@ export async function POST(
 
   if (
     !allowedTypes.some((type) =>
-      type.endsWith("/") ? file.type.startsWith(type) : file.type === type
+      type.endsWith("/") ? file.type.startsWith(type) : file.type === type,
     )
   ) {
     return NextResponse.json(
       { error: "Unsupported file type" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -89,16 +79,19 @@ export async function POST(
   if (file.size > maxSize) {
     return NextResponse.json(
       { error: "File exceeds 20MB limit" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const storagePath = generateAgreementSupportingDocPath(agreementId, file.name);
+  const storagePath = generateAgreementSupportingDocPath(
+    agreementId,
+    file.name,
+  );
   const { url, error } = await uploadFile(
     file,
     STORAGE_BUCKET_NAME,
     storagePath,
-    true
+    true,
   );
 
   if (error) {
@@ -116,16 +109,25 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const authResult = await authorize(request);
+  const authResult = await authorizeApiRequest(
+    request.headers,
+    AGREEMENT_EDITOR_ROLES,
+  );
   if (authResult.status !== 200) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status },
+    );
   }
 
   const { id: agreementId } = await params;
   if (!agreementId) {
-    return NextResponse.json({ error: "Agreement ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Agreement ID is required" },
+      { status: 400 },
+    );
   }
 
   const agreement = await agreementExists(agreementId);
@@ -137,7 +139,10 @@ export async function DELETE(
   const path = body?.path as string | undefined;
 
   if (!path || typeof path !== "string") {
-    return NextResponse.json({ error: "File path is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "File path is required" },
+      { status: 400 },
+    );
   }
 
   const expectedPrefix = `agreements/${agreementId}/supporting/`;

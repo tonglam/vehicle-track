@@ -1,8 +1,6 @@
-import { db } from "@/drizzle/db";
-import { roles, users } from "@/drizzle/schema";
-import { auth } from "@/lib/auth";
+import { authorizeApiRequest } from "@/lib/api-authorization";
+import { AGREEMENT_EDITOR_ROLES } from "@/lib/authorization-policy";
 import { createAgreementTemplate } from "@/lib/services/agreement.service";
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -14,22 +12,14 @@ const templateSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const [user] = await db
-      .select({ roleName: roles.name })
-      .from(users)
-      .innerJoin(roles, eq(users.roleId, roles.id))
-      .where(eq(users.id, session.user.id))
-      .limit(1);
-
-    if (!user || !["admin", "manager"].includes(user.roleName)) {
+    const authorization = await authorizeApiRequest(
+      request.headers,
+      AGREEMENT_EDITOR_ROLES,
+    );
+    if (authorization.status !== 200) {
       return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
+        { error: authorization.error },
+        { status: authorization.status },
       );
     }
 
@@ -38,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     const template = await createAgreementTemplate({
       ...payload,
-      userId: session.user.id,
+      userId: authorization.user.id,
     });
 
     return NextResponse.json({ template }, { status: 201 });
@@ -46,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation error", details: error.issues },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -57,7 +47,7 @@ export async function POST(request: NextRequest) {
     console.error("Error creating template:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,6 +1,7 @@
 import { db } from "@/drizzle/db";
-import { agreements, roles, users } from "@/drizzle/schema";
-import { auth } from "@/lib/auth";
+import { agreements } from "@/drizzle/schema";
+import { authorizeApiRequest } from "@/lib/api-authorization";
+import { AGREEMENT_EDITOR_ROLES } from "@/lib/authorization-policy";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -10,38 +11,27 @@ const exportSchema = z.object({
   sendEmail: z.boolean().optional(),
 });
 
-async function authorize(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session?.user) {
-    return { status: 401 as const, error: "Unauthorized" } as const;
-  }
-
-  const [user] = await db
-    .select({ roleName: roles.name })
-    .from(users)
-    .innerJoin(roles, eq(users.roleId, roles.id))
-    .where(eq(users.id, session.user.id))
-    .limit(1);
-
-  if (!user || !["admin", "manager"].includes(user.roleName)) {
-    return { status: 403 as const, error: "Insufficient permissions" } as const;
-  }
-
-  return { status: 200 as const } as const;
-}
-
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const authResult = await authorize(request);
+  const authResult = await authorizeApiRequest(
+    request.headers,
+    AGREEMENT_EDITOR_ROLES,
+  );
   if (authResult.status !== 200) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status },
+    );
   }
 
   const { id } = await params;
   if (!id) {
-    return NextResponse.json({ error: "Agreement ID is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Agreement ID is required" },
+      { status: 400 },
+    );
   }
 
   const payload = await request.json().catch(() => ({}));
@@ -49,7 +39,7 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validation error", details: parsed.error.issues },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
