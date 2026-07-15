@@ -6,6 +6,19 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { username } from "better-auth/plugins";
 
+function resolveAuthSecret() {
+  const configuredSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (configuredSecret) {
+    return configuredSecret;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("BETTER_AUTH_SECRET is required in production");
+  }
+
+  return "vehicle-track-local-development-secret";
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -71,31 +84,16 @@ export const auth = betterAuth({
         return await compare(password, hashedPassword);
       },
     },
-    sendResetPassword: async ({ user, url, token }, request) => {
+    sendResetPassword: async ({ user, url }) => {
       try {
-        // Log to console for debugging (both dev and prod)
-        console.log("\n========================================");
-        console.log("🔐 PASSWORD RESET REQUEST");
-        console.log("========================================");
-        console.log("User:", user.email);
-        console.log("Reset URL:", url);
-        console.log("Token:", token);
-        console.log("========================================\n");
-
-        // Send actual email via Resend
         const { sendPasswordResetEmail } = await import("./email");
         await sendPasswordResetEmail({
           to: user.email,
           resetUrl: url,
           userName: user.name,
         });
-
-        console.log(
-          "✅ Password reset email sent successfully to:",
-          user.email
-        );
       } catch (error) {
-        console.error("❌ Failed to send password reset email:", error);
+        console.error("Failed to send password reset email", error);
         throw error;
       }
     },
@@ -112,9 +110,7 @@ export const auth = betterAuth({
       maxAge: 60 * 5, // Cache session in cookie for 5 minutes
     },
   },
-  secret:
-    process.env.BETTER_AUTH_SECRET ||
-    "default-secret-please-change-in-production",
+  secret: resolveAuthSecret(),
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
 });

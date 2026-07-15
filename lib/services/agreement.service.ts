@@ -16,10 +16,24 @@ import type {
   AgreementSigningContext,
   AgreementTemplateSummary,
 } from "@/types";
-import { and, asc, desc, eq, ilike, or, sql, not, ne, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  or,
+  sql,
+  not,
+  ne,
+  type SQL,
+} from "drizzle-orm";
 import { auditLog } from "./audit.service";
 import { listAgreementSupportingDocs } from "@/lib/storage";
 import { users as inspectorUsers } from "@/drizzle/schema";
+import { sendAgreementInviteEmail } from "@/lib/email";
+import { assertAgreementTransition } from "@/lib/authorization-policy";
+import crypto from "node:crypto";
 
 export interface AgreementListFilters {
   status?: Agreement["status"];
@@ -47,6 +61,27 @@ export interface CreateAgreementTemplateInput {
   userId: string;
 }
 
+export interface FinaliseAgreementInput {
+  agreementId: string;
+  driverId: string;
+  content?: string;
+  requester: {
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+export class AgreementWorkflowError extends Error {
+  constructor(
+    message: string,
+    public readonly status: 400 | 404 | 502,
+  ) {
+    super(message);
+    this.name = "AgreementWorkflowError";
+  }
+}
+
 function buildVehicleDisplayName(options: {
   year: number | null;
   make: string | null;
@@ -66,7 +101,7 @@ function normalizeSearchTerm(term?: string) {
 }
 
 export async function listAgreements(
-  filters: AgreementListFilters = {}
+  filters: AgreementListFilters = {},
 ): Promise<AgreementListResult> {
   const { limit = 10, offset = 0 } = filters;
   const searchTerm = normalizeSearchTerm(filters.search);
@@ -83,7 +118,7 @@ export async function listAgreements(
       ilike(vehicles.licensePlate, likeTerm),
       ilike(vehicles.make, likeTerm),
       ilike(vehicles.model, likeTerm),
-      ilike(agreementTemplates.title, likeTerm)
+      ilike(agreementTemplates.title, likeTerm),
     );
 
     if (searchCondition) {
@@ -120,12 +155,9 @@ export async function listAgreements(
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
     .leftJoin(
       agreementTemplates,
-      eq(agreements.templateId, agreementTemplates.id)
+      eq(agreements.templateId, agreementTemplates.id),
     )
-    .leftJoin(
-      organizations,
-      eq(organizations.createdBy, agreements.createdBy)
-    )
+    .leftJoin(organizations, eq(organizations.createdBy, agreements.createdBy))
     .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id));
 
   const listQuery = (() => {
@@ -141,7 +173,7 @@ export async function listAgreements(
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
     .leftJoin(
       agreementTemplates,
-      eq(agreements.templateId, agreementTemplates.id)
+      eq(agreements.templateId, agreementTemplates.id),
     );
 
   const countQuery = (() => {
@@ -215,7 +247,7 @@ export async function getAgreementTemplateById(id: string) {
 }
 
 export async function createAgreementRecord(
-  input: CreateAgreementInput
+  input: CreateAgreementInput,
 ): Promise<Agreement> {
   const { vehicleId, inspectionId, templateId, userId } = input;
 
@@ -242,14 +274,14 @@ export async function createAgreementRecord(
     .where(
       and(
         eq(agreements.vehicleId, vehicleId),
-        ne(agreements.status, "terminated")
-      )
+        ne(agreements.status, "terminated"),
+      ),
     )
     .limit(1);
 
   if (activeAgreement) {
     throw new Error(
-      "This vehicle already has an active agreement. Please terminate the existing agreement before completing a new one."
+      "This vehicle already has an active agreement. Please terminate the existing agreement before completing a new one.",
     );
   }
 
@@ -284,7 +316,7 @@ export async function createAgreementRecord(
 }
 
 export async function createAgreementTemplate(
-  input: CreateAgreementTemplateInput
+  input: CreateAgreementTemplateInput,
 ) {
   const { title, contentRichtext, active, userId } = input;
 
@@ -316,8 +348,132 @@ export async function createAgreementTemplate(
   return template;
 }
 
+function getApplicationBaseUrl() {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "http://localhost:3000";
+}
+
+export async function finaliseAgreementForSigning(
+  input: FinaliseAgreementInput,
+) {
+  const [agreementRow] = await db
+    .select({
+      id: agreements.id,
+      status: agreements.status,
+      templateTitle: agreementTemplates.title,
+      licensePlate: vehicles.licensePlate,
+      vehicleYear: vehicles.year,
+      vehicleMake: vehicles.make,
+      vehicleModel: vehicles.model,
+      signingToken: agreements.signingToken,
+      finalContent: agreements.finalContentRichtext,
+      templateContent: agreementTemplates.contentRichtext,
+    })
+    .from(agreements)
+    .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
+    .leftJoin(
+      agreementTemplates,
+      eq(agreements.templateId, agreementTemplates.id),
+    )
+    .where(eq(agreements.id, input.agreementId))
+    .limit(1);
+
+  if (!agreementRow) {
+    throw new AgreementWorkflowError("Agreement not found", 404);
+  }
+
+  if (agreementRow.status !== "pending_signature") {
+    try {
+      assertAgreementTransition(agreementRow.status, "pending_signature");
+    } catch {
+      throw new AgreementWorkflowError(
+        `Agreement cannot be sent for signature from ${agreementRow.status}`,
+        400,
+      );
+    }
+  }
+
+  const [driver] = await db
+    .select({
+      id: drivers.id,
+      firstName: drivers.firstName,
+      lastName: drivers.lastName,
+      email: drivers.email,
+    })
+    .from(drivers)
+    .where(eq(drivers.id, input.driverId))
+    .limit(1);
+
+  if (!driver) {
+    throw new AgreementWorkflowError("Driver not found", 404);
+  }
+  if (!driver.email) {
+    throw new AgreementWorkflowError(
+      "Driver must have an email address before sending",
+      400,
+    );
+  }
+
+  const resolvedContent = input.content?.trim().length
+    ? input.content
+    : (agreementRow.finalContent ?? agreementRow.templateContent);
+
+  if (!resolvedContent) {
+    throw new AgreementWorkflowError(
+      "Agreement content missing. Finalise the template first.",
+      400,
+    );
+  }
+
+  const signingToken = agreementRow.signingToken ?? crypto.randomUUID();
+  await db
+    .update(agreements)
+    .set({
+      finalContentRichtext: resolvedContent,
+      signingToken,
+      status: "pending_signature",
+      signedByDriverId: driver.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(agreements.id, input.agreementId));
+
+  const signingLink = `${getApplicationBaseUrl().replace(/\/$/, "")}/agreements/driver/sign/${signingToken}`;
+
+  try {
+    await sendAgreementInviteEmail({
+      to: driver.email,
+      driverName:
+        `${driver.firstName ?? ""} ${driver.lastName ?? ""}`.trim() || "Driver",
+      requesterName:
+        `${input.requester.firstName ?? ""} ${input.requester.lastName ?? ""}`.trim() ||
+        input.requester.email,
+      vehicleName: buildVehicleDisplayName({
+        year: agreementRow.vehicleYear,
+        make: agreementRow.vehicleMake,
+        model: agreementRow.vehicleModel,
+      }),
+      licensePlate: agreementRow.licensePlate ?? "—",
+      templateTitle: agreementRow.templateTitle ?? "Vehicle Rental Agreement",
+      signingLink,
+    });
+  } catch (error) {
+    console.error("Failed to send agreement invite", error);
+    throw new AgreementWorkflowError(
+      "Agreement updated but the invitation email could not be sent",
+      502,
+    );
+  }
+
+  return { signingLink };
+}
+
 export async function getAgreementFinaliseContext(
-  agreementId: string
+  agreementId: string,
 ): Promise<AgreementFinaliseContext | null> {
   const [row] = await db
     .select({
@@ -339,12 +495,9 @@ export async function getAgreementFinaliseContext(
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
     .leftJoin(
       agreementTemplates,
-      eq(agreements.templateId, agreementTemplates.id)
+      eq(agreements.templateId, agreementTemplates.id),
     )
-    .leftJoin(
-      organizations,
-      eq(organizations.createdBy, agreements.createdBy)
-    )
+    .leftJoin(organizations, eq(organizations.createdBy, agreements.createdBy))
     .where(eq(agreements.id, agreementId))
     .limit(1);
 
@@ -364,7 +517,8 @@ export async function getAgreementFinaliseContext(
       }),
       licensePlate: row.licensePlate ?? "—",
     },
-    finalContentRichtext: row.finalContentRichtext ?? row.templateContent ?? null,
+    finalContentRichtext:
+      row.finalContentRichtext ?? row.templateContent ?? null,
     signingToken: row.signingToken ?? null,
     organizationName: row.organizationName ?? null,
     template: {
@@ -376,7 +530,7 @@ export async function getAgreementFinaliseContext(
 }
 
 export async function getAgreementDetailContext(
-  agreementId: string
+  agreementId: string,
 ): Promise<AgreementDetailContext | null> {
   const [row] = await db
     .select({
@@ -413,23 +567,14 @@ export async function getAgreementDetailContext(
     })
     .from(agreements)
     .leftJoin(vehicles, eq(agreements.vehicleId, vehicles.id))
-    .leftJoin(
-      inspections,
-      eq(agreements.inspectionId, inspections.id)
-    )
-    .leftJoin(
-      inspectorUsers,
-      eq(inspections.inspectorId, inspectorUsers.id)
-    )
+    .leftJoin(inspections, eq(agreements.inspectionId, inspections.id))
+    .leftJoin(inspectorUsers, eq(inspections.inspectorId, inspectorUsers.id))
     .leftJoin(
       agreementTemplates,
-      eq(agreements.templateId, agreementTemplates.id)
+      eq(agreements.templateId, agreementTemplates.id),
     )
     .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id))
-    .leftJoin(
-      organizations,
-      eq(organizations.createdBy, agreements.createdBy)
-    )
+    .leftJoin(organizations, eq(organizations.createdBy, agreements.createdBy))
     .where(eq(agreements.id, agreementId))
     .limit(1);
 
@@ -466,13 +611,13 @@ export async function getAgreementDetailContext(
           .from(inspections)
           .leftJoin(
             inspectorUsers,
-            eq(inspections.inspectorId, inspectorUsers.id)
+            eq(inspections.inspectorId, inspectorUsers.id),
           )
           .where(
             and(
               eq(inspections.vehicleId, row.vehicleId),
-              not(eq(inspections.id, row.inspectionId))
-            )
+              not(eq(inspections.id, row.inspectionId)),
+            ),
           )
           .orderBy(desc(inspections.updatedAt))
       : Promise.resolve([]),
@@ -497,9 +642,14 @@ export async function getAgreementDetailContext(
     signingToken: row.signingToken ?? null,
     organizationName: row.organizationName ?? null,
     driver:
-      row.driverFirstName || row.driverLastName || row.driverEmail || row.driverPhone
+      row.driverFirstName ||
+      row.driverLastName ||
+      row.driverEmail ||
+      row.driverPhone
         ? {
-            name: `${row.driverFirstName ?? ""} ${row.driverLastName ?? ""}`.trim() || "Driver",
+            name:
+              `${row.driverFirstName ?? ""} ${row.driverLastName ?? ""}`.trim() ||
+              "Driver",
             email: row.driverEmail ?? null,
             phone: row.driverPhone ?? null,
           }
@@ -552,7 +702,7 @@ export async function getAgreementDetailContext(
 }
 
 export async function getAgreementSigningContext(
-  signingToken: string
+  signingToken: string,
 ): Promise<AgreementSigningContext | null> {
   const [row] = await db
     .select({
@@ -576,12 +726,9 @@ export async function getAgreementSigningContext(
     .leftJoin(drivers, eq(agreements.signedByDriverId, drivers.id))
     .leftJoin(
       agreementTemplates,
-      eq(agreements.templateId, agreementTemplates.id)
+      eq(agreements.templateId, agreementTemplates.id),
     )
-    .leftJoin(
-      organizations,
-      eq(organizations.createdBy, agreements.createdBy)
-    )
+    .leftJoin(organizations, eq(organizations.createdBy, agreements.createdBy))
     .where(eq(agreements.signingToken, signingToken))
     .limit(1);
 
